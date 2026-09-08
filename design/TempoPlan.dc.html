@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/nocturne-60c16d8e-f385-46f7-82f9-f9ae2551355c/styles.css">
+  <link rel="stylesheet" href="tempo-tokens.css">
+  <script src="_ds/nocturne-60c16d8e-f385-46f7-82f9-f9ae2551355c/_ds_bundle.js"></script>
+</helmet>
+<div style="width:390px;height:844px;position:relative;overflow:hidden;border-radius:44px;background:var(--t-bg);color:var(--t-ink);font-family:var(--font-body);display:flex;flex-direction:column;-webkit-font-smoothing:antialiased">
+
+  <div style="height:var(--safe-top);flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 28px 6px;font-size:14px;font-weight:600">
+    <span style="font-variant-numeric:tabular-nums">20:14</span>
+    <span style="display:flex;align-items:center;gap:5px">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"></rect><rect x="4.5" y="5" width="3" height="6" rx="1"></rect><rect x="9" y="2.5" width="3" height="8.5" rx="1"></rect><rect x="13.5" y="0" width="3" height="11" rx="1" opacity="0.35"></rect></svg>
+      <svg width="16" height="11" viewBox="0 0 16 11" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 3.4a9.5 9.5 0 0 1 14 0"></path><path d="M3.6 6.2a6 6 0 0 1 8.8 0"></path><path d="M6.2 8.9a2.6 2.6 0 0 1 3.6 0"></path></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3.2" stroke="currentColor" opacity="0.4"></rect><rect x="2.2" y="2.2" width="14" height="7.6" rx="2" fill="currentColor"></rect><path d="M23 4.2v3.6a2 2 0 0 0 0-3.6z" fill="currentColor" opacity="0.4"></path></svg>
+    </span>
+  </div>
+
+  <div style="flex:none;display:flex;align-items:center;justify-content:space-between;padding:4px 12px 10px 16px">
+    <span style="font-size:25px;font-weight:500;letter-spacing:-0.015em">Plan</span>
+    <div style="display:flex;align-items:center;gap:2px">
+      <button type="button" style="width:44px;height:44px;border:0;background:transparent;color:var(--t-ink-3);display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:var(--r-md)" style-hover="background:var(--t-surface)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5l-7 7 7 7"></path></svg>
+      </button>
+      <span style="font-size:var(--fs-label);color:var(--t-ink-2);font-variant-numeric:tabular-nums;min-width:96px;text-align:center">KW 37 · 8.–14.9.</span>
+      <button type="button" style="width:44px;height:44px;border:0;background:transparent;color:var(--t-ink-3);display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:var(--r-md)" style-hover="background:var(--t-surface)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 5l7 7-7 7"></path></svg>
+      </button>
+    </div>
+  </div>
+
+  <sc-if value="{{ showBanner }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:none;margin:0 16px 8px;padding:9px 12px;border-radius:var(--r-md);display:flex;align-items:center;gap:9px;background:{{ bannerBg }};box-shadow:0 0 0 1px {{ bannerLine }}">
+      <span style="width:7px;height:7px;flex:none;border-radius:var(--r-pill);background:{{ bannerDot }}"></span>
+      <span style="flex:1;font-size:var(--fs-label);line-height:1.35;color:var(--t-ink-2)">{{ bannerText }}</span>
+      <sc-if value="{{ isError }}" hint-placeholder-val="{{ false }}">
+        <button type="button" class="btn btn-primary" style="flex:none;min-height:28px;padding:0 10px;font-size:var(--fs-label);color:var(--t-accent-ink);border-color:var(--t-accent-line)">Erneut</button>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <div data-tempo-scroll="" style="flex:1;min-height:0;overflow-y:auto;padding:0 16px 108px;display:flex;flex-direction:column;gap:12px">
+
+    <sc-if value="{{ hasData }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:12px;opacity:{{ dataOpacity }}">
+
+        <div style="background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:12px 14px 13px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between">
+            <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Zielwettkampf</span>
+            <span style="font-size:var(--fs-micro);color:var(--t-ink-3);font-variant-numeric:tabular-nums">18.10.2026</span>
+          </div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px">
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <span style="font-size:var(--fs-body);font-weight:500">Halbmarathon München</span>
+              <span style="font-size:var(--fs-micro);color:var(--t-ink-3);font-variant-numeric:tabular-nums">Zielzeit 1:31 · 4:20 /km</span>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:5px">
+              <span style="font-size:var(--fs-metric);line-height:1;font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:var(--ls-num)">40</span>
+              <span style="font-size:var(--fs-micro);color:var(--t-ink-3)">Tage</span>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px">
+            <div style="display:flex;flex-direction:column;gap:4px"><span style="height:3px;border-radius:var(--r-pill);background:var(--t-accent)"></span><span style="font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--t-accent-ink)">Base</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><span style="height:3px;border-radius:var(--r-pill);background:var(--t-line)"></span><span style="font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--t-ink-3)">Build</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><span style="height:3px;border-radius:var(--r-pill);background:var(--t-line)"></span><span style="font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--t-ink-3)">Peak</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><span style="height:3px;border-radius:var(--r-pill);background:var(--t-line)"></span><span style="font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--t-ink-3)">Taper</span></div>
+          </div>
+          <sc-if value="{{ paceBuilding }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:4px;padding-top:8px;border-top:1px solid var(--t-line)">
+              <span style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--t-accent-ink)">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M4 20V9M11 20V4M18 20v-7"></path></svg>Zielpace im Aufbau
+              </span>
+              <span style="font-size:var(--fs-metric-xs);font-weight:500;font-variant-numeric:tabular-nums;color:var(--t-ink-2)">34<span style="font-size:10.5px;color:var(--t-ink-3);margin-left:3px">/ 42 Tagen Schwellendaten</span></span>
+              <span style="display:block;height:3px;border-radius:var(--r-pill);background:var(--t-line);overflow:hidden"><span style="display:block;height:3px;width:81%;background:var(--t-accent-line)"></span></span>
+              <span style="font-size:10.5px;color:var(--t-ink-3)">belastbare Zielpace ab 12.10. — bis dahin Richtwert aus VDOT</span>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between">
+            <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Woche 3/12 · Base</span>
+            <span style="font-size:var(--fs-micro);color:var(--t-ink-3);font-variant-numeric:tabular-nums">geplant 68 km · 412 TSS</span>
+          </div>
+          <sc-for list="{{ days }}" as="d" hint-placeholder-count="7">
+            <button type="button" onClick="{{ d.onOpen }}" data-day="{{ d.key }}" style="width:100%;text-align:left;border:0;border-radius:var(--r-lg);background:var(--t-surface);box-shadow:{{ d.shadow }};padding:10px 12px;display:flex;align-items:center;gap:11px;cursor:pointer;font-family:inherit;min-height:64px" style-hover="background:var(--t-surface-2)">
+              <span style="flex:none;width:30px;display:flex;flex-direction:column;align-items:center;gap:1px">
+                <span style="font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:{{ d.dayInk }}">{{ d.day }}</span>
+                <span style="font-size:var(--fs-metric-xs);font-weight:500;font-variant-numeric:tabular-nums;color:{{ d.dayInk }}">{{ d.date }}</span>
+              </span>
+              <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+                <span style="display:flex;align-items:center;gap:6px">
+                  <span style="font-size:10.5px;padding:2px 6px;border-radius:var(--r-sm);background:{{ d.badgeBg }};color:{{ d.badgeInk }};white-space:nowrap">{{ d.type }}</span>
+                  <span style="font-size:var(--fs-label);color:var(--t-ink-2);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.spec }}</span>
+                </span>
+                <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:{{ d.syncInk }}">
+                  <span style="width:6px;height:6px;border-radius:var(--r-pill);background:{{ d.syncInk }};opacity:{{ d.syncDotOpacity }}"></span>{{ d.sync }}
+                </span>
+              </span>
+              <span style="flex:none;display:flex;align-items:center;gap:8px">
+                <sc-if value="{{ d.stale }}" hint-placeholder-val="{{ false }}">
+                  <span style="display:inline-flex;align-items:center;gap:3px;padding:2px 5px;border:1px dashed var(--st-neutral);border-radius:var(--r-sm);font-size:11px;letter-spacing:.01em;color:var(--st-neutral);white-space:nowrap">
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v5l3.5 2"></path></svg>{{ d.staleDate }}
+                  </span>
+                </sc-if>
+                <span style="width:26px;height:26px;border-radius:var(--r-pill);border:1px solid {{ d.checkLine }};background:{{ d.checkBg }};color:{{ d.checkInk }};display:flex;align-items:center;justify-content:center">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5l5 5 10-11"></path></svg>
+                </span>
+              </span>
+            </button>
+          </sc-for>
+        </div>
+
+        <button type="button" class="btn btn-primary btn-block" onClick="{{ onReplan }}" style="min-height:var(--touch);margin:2px 0 0;font-size:var(--fs-body);color:var(--t-accent-ink);border-color:var(--t-accent);gap:8px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.2l1.7 7.1 7.1 1.7-7.1 1.7L12 21.8l-1.7-9.1L3.2 11l7.1-1.7z"></path></svg>
+          Woche neu planen lassen
+        </button>
+        <span style="font-size:var(--fs-micro);line-height:1.45;color:var(--t-ink-3);text-align:center">Die KI schlägt eine neue Verteilung vor — du bestätigst, bevor etwas überschrieben wird.</span>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:10px;padding-top:4px">
+        <div style="height:132px;border-radius:var(--r-lg);background:linear-gradient(90deg,var(--t-surface),var(--t-surface-2),var(--t-surface));background-size:220% 100%;animation:tempo-shimmer 1.4s linear infinite"></div>
+        <div style="height:64px;border-radius:var(--r-lg);background:linear-gradient(90deg,var(--t-surface),var(--t-surface-2),var(--t-surface));background-size:220% 100%;animation:tempo-shimmer 1.4s linear infinite"></div>
+        <div style="height:64px;border-radius:var(--r-lg);background:linear-gradient(90deg,var(--t-surface),var(--t-surface-2),var(--t-surface));background-size:220% 100%;animation:tempo-shimmer 1.4s linear infinite"></div>
+        <div style="height:64px;border-radius:var(--r-lg);background:linear-gradient(90deg,var(--t-surface),var(--t-surface-2),var(--t-surface));background-size:220% 100%;animation:tempo-shimmer 1.4s linear infinite"></div>
+        <div style="height:64px;border-radius:var(--r-lg);background:linear-gradient(90deg,var(--t-surface),var(--t-surface-2),var(--t-surface));background-size:220% 100%;animation:tempo-shimmer 1.4s linear infinite"></div>
+        <div style="height:64px;border-radius:var(--r-lg);background:linear-gradient(90deg,var(--t-surface),var(--t-surface-2),var(--t-surface));background-size:220% 100%;animation:tempo-shimmer 1.4s linear infinite"></div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:14px;padding:72px 8px 0;text-align:center">
+        <svg width="120" height="104" viewBox="0 0 120 104" fill="none"><rect x="4" y="12" width="112" height="88" rx="14" stroke="var(--t-line)" stroke-width="2" stroke-dasharray="5 8"></rect><path d="M4 38h112M32 4v16M88 4v16" stroke="var(--t-line)" stroke-width="2"></path></svg>
+        <div style="font-size:var(--fs-metric-xs);font-weight:500">Kein Plan angelegt</div>
+        <div style="font-size:var(--fs-sub);line-height:1.5;color:var(--t-ink-3);max-width:280px">Setz einen Zielwettkampf, dann baut Tempo daraus einen Wochenplan — Phasen, Volumen und Einheiten inklusive.</div>
+        <button type="button" class="btn btn-primary btn-block" style="max-width:280px;min-height:var(--touch);margin:4px 0 0;font-size:var(--fs-body);color:var(--t-accent-ink);border-color:var(--t-accent)">Zielwettkampf anlegen</button>
+      </div>
+    </sc-if>
+  </div>
+
+  <sc-if value="{{ sheetOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;background:rgba(9,10,16,.62);display:flex;align-items:flex-end;animation:tempo-fadein .16s ease-out">
+      <div style="width:100%;max-height:756px;overflow-y:auto;border-radius:24px 24px 44px 44px;background:var(--t-bg);box-shadow:0 -1px 0 var(--t-line-strong), 0 -18px 40px rgba(0,0,0,.5);padding:10px 16px calc(var(--safe-bottom) + 8px);display:flex;flex-direction:column;gap:12px" data-tempo-scroll="">
+        <div style="display:flex;justify-content:center;padding:2px 0 4px"><span style="width:38px;height:4px;border-radius:var(--r-pill);background:var(--t-line-strong)"></span></div>
+
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <div style="display:flex;align-items:center;gap:7px">
+              <span style="font-size:10.5px;padding:2px 6px;border-radius:var(--r-sm);background:var(--z4-band);color:var(--z4)">Intervall</span>
+              <span style="font-size:var(--fs-micro);color:var(--t-ink-3);font-variant-numeric:tabular-nums">Mi 10.9. · geplant</span>
+            </div>
+            <span style="font-size:20px;font-weight:500;letter-spacing:-0.01em">{{ reps }} × 1000 m an der Schwelle</span>
+            <span style="font-size:var(--fs-label);color:var(--t-ink-3);font-variant-numeric:tabular-nums">{{ totalTime }} · {{ totalKm }} km · {{ totalTss }} TSS</span>
+          </div>
+          <button type="button" onClick="{{ onClose }}" style="flex:none;width:44px;height:44px;border:0;background:transparent;color:var(--t-ink-3);display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:var(--r-md)" style-hover="background:var(--t-surface)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+          </button>
+        </div>
+
+        <div style="background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:12px 14px 13px;display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between">
+            <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Struktur · Dauer × Zielzone</span>
+            <span style="font-size:var(--fs-micro);color:var(--t-ink-3);font-variant-numeric:tabular-nums">{{ totalTime }}</span>
+          </div>
+          <div style="display:flex;align-items:flex-end;height:64px;gap:1px">
+            <sc-for list="{{ segments }}" as="g" hint-placeholder-count="9">
+              <span style="flex:{{ g.flex }};height:{{ g.h }};background:{{ g.color }};border-radius:2px 2px 0 0;min-width:2px"></span>
+            </sc-for>
+          </div>
+          <div style="display:flex;gap:10px;font-size:10.5px;color:var(--t-ink-3)">
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--z1)"></span>Z1</span>
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--z2)"></span>Z2</span>
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--z4)"></span>Z4</span>
+            <span style="margin-left:auto;font-variant-numeric:tabular-nums">Ziel 4:05–4:10 /km · 168 bpm</span>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between">
+            <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Schritte · antippen zum Ändern</span>
+            <span style="font-size:var(--fs-micro);color:var(--t-ink-3)">4 Blöcke</span>
+          </div>
+          <sc-for list="{{ steps }}" as="st" hint-placeholder-count="4">
+            <div style="background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:9px 10px 9px 12px;display:flex;align-items:center;gap:10px">
+              <span style="flex:none;width:3px;height:32px;border-radius:var(--r-pill);background:{{ st.color }}"></span>
+              <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+                <span style="font-size:var(--fs-label);font-weight:500">{{ st.name }}</span>
+                <span style="font-size:10.5px;color:var(--t-ink-3);font-variant-numeric:tabular-nums">{{ st.detail }}</span>
+              </span>
+              <span style="flex:none;display:flex;align-items:center;gap:2px">
+                <button type="button" onClick="{{ st.onMinus }}" data-key="{{ st.key }}" style="width:34px;height:44px;border:0;background:transparent;color:var(--t-accent-ink);font-family:inherit;font-size:18px;cursor:pointer;border-radius:var(--r-md)" style-hover="background:var(--t-accent-soft)">−</button>
+                <span style="min-width:46px;text-align:center;font-size:var(--fs-label);font-weight:500;font-variant-numeric:tabular-nums">{{ st.value }}</span>
+                <button type="button" onClick="{{ st.onPlus }}" data-key="{{ st.key }}" style="width:34px;height:44px;border:0;background:transparent;color:var(--t-accent-ink);font-family:inherit;font-size:18px;cursor:pointer;border-radius:var(--r-md)" style-hover="background:var(--t-accent-soft)">+</button>
+              </span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px;padding-top:2px">
+          <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:var(--r-md);background:{{ syncBoxBg }};box-shadow:0 0 0 1px {{ syncBoxLine }}">
+            <span style="flex:none;width:22px;height:22px;border-radius:var(--r-sm);border:1px solid {{ syncBoxLine }};display:flex;align-items:center;justify-content:center;color:{{ syncBoxInk }}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="3" width="12" height="18" rx="3"></rect><path d="M9.5 1.5h5M12 7.5v5l3 1.6"></path></svg>
+            </span>
+            <span style="flex:1;font-size:var(--fs-label);color:{{ syncBoxInk }}">{{ syncBoxText }}</span>
+          </div>
+          <button type="button" class="btn btn-primary btn-block" onClick="{{ onSend }}" disabled="{{ sendDisabled }}" style="min-height:52px;margin:0;font-size:var(--fs-body);color:{{ sendInk }};border-color:{{ sendLine }};gap:8px">
+            <sc-if value="{{ sendIdle }}" hint-placeholder-val="{{ true }}">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"></path></svg>
+            </sc-if>
+            <sc-if value="{{ sendDone }}" hint-placeholder-val="{{ false }}">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5l5 5 10-11"></path></svg>
+            </sc-if>
+            {{ sendLabel }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;left:16px;right:16px;bottom:98px;padding:10px 12px;border-radius:var(--r-md);background:var(--t-surface-2);box-shadow:var(--sh-2);font-size:var(--fs-label);color:var(--t-ink-2);animation:tempo-fadein .16s ease-out">{{ toast }}</div>
+  </sc-if>
+
+  <div style="position:absolute;left:0;right:0;bottom:0;padding:0 8px calc(var(--safe-bottom) - 12px);background:color-mix(in srgb, var(--t-bg) 88%, transparent);backdrop-filter:blur(14px);border-top:1px solid var(--t-line)">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);height:var(--tabbar-h)">
+      <button type="button" style="border:0;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0;color:var(--t-ink-3);font-family:inherit">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8.2"></circle><path d="M12 3.8a8.2 8.2 0 0 1 6.4 3.1" stroke-width="2.6" stroke-linecap="round"></path></svg>
+        <span style="font-size:10px">Heute</span>
+      </button>
+      <button type="button" style="border:0;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0;color:var(--t-ink-3);font-family:inherit">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3.5 20V4.5"></path><path d="M3.5 20h16.5"></path><path d="M6.5 16l4-5 3.5 2.5 5-7.5"></path></svg>
+        <span style="font-size:10px">Trends</span>
+      </button>
+      <button type="button" style="border:0;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0;color:var(--t-accent-ink);font-family:inherit">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"></rect><path d="M3.5 10h17M8 3.5v3M16 3.5v3"></path></svg>
+        <span style="font-size:10px">Plan</span>
+      </button>
+      <button type="button" style="border:0;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0;color:var(--t-ink-3);font-family:inherit">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M20.5 12.2c0 4.1-3.8 7.4-8.5 7.4-1 0-2-.15-2.9-.42L4 20.8l1.3-3.5A7.1 7.1 0 0 1 3.5 12.2c0-4.1 3.8-7.4 8.5-7.4s8.5 3.3 8.5 7.4z"></path></svg>
+        <span style="font-size:10px">Coach</span>
+      </button>
+      <button type="button" style="border:0;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0;color:var(--t-ink-3);font-family:inherit">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3.5 7.5h17M3.5 16.5h17"></path><circle cx="9" cy="7.5" r="2.4" fill="var(--t-bg)"></circle><circle cx="15" cy="16.5" r="2.4" fill="var(--t-bg)"></circle></svg>
+        <span style="font-size:10px">Mehr</span>
+      </button>
+    </div>
+    <div style="display:flex;justify-content:center;padding-top:2px"><span style="width:134px;height:5px;border-radius:var(--r-pill);background:var(--t-ink-3);opacity:.5"></span></div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;ready&quot;,&quot;aufbau&quot;,&quot;loading&quot;,&quot;empty&quot;,&quot;offline&quot;,&quot;error&quot;],&quot;default&quot;:&quot;ready&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Zustand&quot;}}">
+class Component extends DCLogic {
+  state = {
+    sheet: false, send: "idle", toast: "",
+    warm: 15, reps: 6, work: 4, rest: 2, cool: 10,
+  };
+
+  fire(msg) {
+    clearTimeout(this._t);
+    this.setState({ toast: msg });
+    this._t = setTimeout(() => this.setState({ toast: "" }), 2400);
+  }
+
+  bump(key, delta) {
+    const lim = { warm: [5, 30], reps: [2, 12], work: [1, 10], rest: [1, 6], cool: [5, 25] }[key];
+    this.setState((p) => {
+      const v = Math.min(lim[1], Math.max(lim[0], p[key] + delta));
+      return { [key]: v, send: p.send === "done" ? "stale" : p.send };
+    });
+  }
+
+  dayRows(offline, aufbau) {
+    const badge = {
+      "Long Run": ["var(--z1-band)", "var(--z1)"],
+      "Recovery": ["var(--z1-band)", "var(--z1)"],
+      "Intervall": ["var(--z4-band)", "var(--z4)"],
+      "Tempo": ["var(--z3-band)", "var(--z3)"],
+      "Ruhetag": ["var(--t-surface-2)", "var(--t-ink-3)"],
+    };
+    const rows = [
+      { day: "Mo", date: "8", type: "Recovery", spec: "50 min · Z2 · 9,5 km", done: false, sync: "onwatch", at: "07:40", today: true },
+      { day: "Di", date: "9", type: "Tempo", spec: "8 km @ 4:20 · Z3", done: false, sync: "onwatch", at: "19:02" },
+      { day: "Mi", date: "10", type: "Intervall", spec: "6 × 1000 m · Z4", done: false, sync: "pending", at: "" },
+      { day: "Do", date: "11", type: "Recovery", spec: "40 min · Z1", done: false, sync: "sending", at: "20:13" },
+      { day: "Fr", date: "12", type: "Ruhetag", spec: "kein Lauf geplant", done: false, sync: "none", at: "" },
+      { day: "Sa", date: "13", type: "Tempo", spec: "12 km mit 3 × 8 min Z4", done: false, sync: "pending", at: "" },
+      { day: "So", date: "14", type: "Long Run", spec: "22 km · Z2 · 1:45", done: false, sync: "onwatch", at: "gestern 21:40" },
+    ];
+    const syncMap = {
+      onwatch: (at) => ["Auf Uhr · " + at, "var(--st-good)", 1],
+      sending: (at) => ["Wird übertragen · seit " + at, "var(--st-caution)", 0.55],
+      pending: () => ["Nicht übertragen", "var(--st-warn)", 1],
+      none: () => ["Nichts zu übertragen", "var(--t-ink-3)", 0.5],
+    };
+    return rows.map((r, idx) => {
+      const [sync, syncInk, dotOp] = syncMap[r.sync](r.at);
+      const b = badge[r.type];
+      const isMi = r.day === "Mi";
+      return {
+        key: r.day, day: r.day, date: r.date,
+        dayInk: r.today ? "var(--t-ink)" : "var(--t-ink-3)",
+        type: r.type, spec: r.spec,
+        badgeBg: b[0], badgeInk: b[1],
+        sync, syncInk, syncDotOpacity: dotOp,
+        shadow: isMi ? "var(--sh-glow)" : "var(--sh-1)",
+        checkLine: r.done ? "var(--t-accent)" : "var(--t-line)",
+        checkBg: r.done ? "var(--t-accent-soft)" : "transparent",
+        checkInk: r.done ? "var(--t-accent-ink)" : "var(--t-line-strong)",
+        stale: (offline || aufbau) && idx === 6,
+        staleDate: "Plan 01.09.",
+        onOpen: () => {
+          if (isMi) this.setState({ sheet: true });
+          else this.fire(r.type === "Ruhetag" ? "Ruhetag — nichts zu planen." : "Detailansicht: " + r.day + ", " + r.type + ".");
+        },
+      };
+    });
+  }
+
+  renderVals() {
+    const s = this.props.state || "ready";
+    const isError = s === "error", isOffline = s === "offline";
+    const isLoading = s === "loading", isEmpty = s === "empty", isAufbau = s === "aufbau";
+    const { warm, reps, work, rest, cool, send } = this.state;
+
+    const totalMin = warm + reps * work + (reps - 1) * rest + cool;
+    const segs = [{ d: warm, z: "var(--z2)", h: "38%" }];
+    for (let k = 0; k < reps; k++) {
+      segs.push({ d: work, z: "var(--z4)", h: "100%" });
+      if (k < reps - 1) segs.push({ d: rest, z: "var(--z1)", h: "24%" });
+    }
+    segs.push({ d: cool, z: "var(--z1)", h: "24%" });
+
+    const sendMap = {
+      idle: ["An Uhr senden", "var(--t-accent-ink)", "var(--t-accent)", false, true, false],
+      sending: ["Wird übertragen …", "var(--st-caution)", "var(--st-caution)", true, false, false],
+      done: ["Auf Uhr · 20:14", "var(--st-good)", "var(--st-good)", true, false, true],
+      stale: ["Änderung an Uhr senden", "var(--t-accent-ink)", "var(--t-accent)", false, true, false],
+    };
+    const sm = sendMap[send];
+    const syncBox = {
+      idle: ["Noch nicht auf der Uhr — geplant für Mi 10.9.", "var(--st-warn-soft)", "var(--st-warn)", "var(--st-warn)"],
+      sending: ["Übertragung läuft …", "var(--st-caution-soft)", "var(--st-caution)", "var(--st-caution)"],
+      done: ["Auf Uhr · übertragen heute 20:14", "var(--st-good-soft)", "var(--st-good)", "var(--st-good)"],
+      stale: ["Struktur geändert — Uhr hat noch die alte Version von 20:14", "var(--st-caution-soft)", "var(--st-caution)", "var(--st-caution)"],
+    }[send];
+
+    const fmt = (m) => Math.floor(m) + ":" + String(Math.round((m % 1) * 60)).padStart(2, "0");
+
+    return {
+      isLoading, isEmpty, isError,
+      hasData: !isLoading && !isEmpty,
+      dataOpacity: isOffline || isError ? 0.72 : 1,
+      showBanner: isOffline || isError,
+      bannerText: isError
+        ? "Plan-Sync fehlgeschlagen. Änderungen liegen lokal und gehen später raus."
+        : "Offline — Plan vom 01.09., Übertragung an die Uhr wartet auf Verbindung.",
+      bannerBg: isError ? "var(--st-warn-soft)" : "var(--st-neutral-soft)",
+      bannerLine: isError ? "var(--st-warn)" : "var(--t-line-strong)",
+      bannerDot: isError ? "var(--st-warn)" : "var(--st-neutral)",
+      paceBuilding: isAufbau,
+
+      days: this.dayRows(isOffline || isError, isAufbau),
+
+      sheetOpen: this.state.sheet,
+      onClose: () => this.setState({ sheet: false }),
+      reps,
+      totalTime: fmt(totalMin),
+      totalKm: (totalMin / 4.6).toFixed(1).replace(".", ","),
+      totalTss: Math.round(totalMin * 1.35),
+      segments: segs.map((g) => ({ flex: g.d, h: g.h, color: g.z })),
+      steps: [
+        { key: "warm", name: "Aufwärmen", detail: "Z2 · 5:10–5:30 /km", value: warm + " min", color: "var(--z2)", onMinus: () => this.bump("warm", -5), onPlus: () => this.bump("warm", 5) },
+        { key: "reps", name: "Intervalle", detail: work + " min in Z4 · 4:05–4:10 /km", value: reps + " ×", color: "var(--z4)", onMinus: () => this.bump("reps", -1), onPlus: () => this.bump("reps", 1) },
+        { key: "rest", name: "Trabpause", detail: "Z1 · locker, HF unter 130", value: rest + " min", color: "var(--z1)", onMinus: () => this.bump("rest", -1), onPlus: () => this.bump("rest", 1) },
+        { key: "cool", name: "Auslaufen", detail: "Z1 · bis HF unter 120", value: cool + " min", color: "var(--z1)", onMinus: () => this.bump("cool", -5), onPlus: () => this.bump("cool", 5) },
+      ],
+
+      sendLabel: sm[0], sendInk: sm[1], sendLine: sm[2], sendDisabled: sm[3],
+      sendIdle: sm[4], sendDone: sm[5],
+      syncBoxText: syncBox[0], syncBoxBg: syncBox[1], syncBoxLine: syncBox[2], syncBoxInk: syncBox[3],
+      onSend: () => {
+        if (this.state.send === "sending" || this.state.send === "done") return;
+        this.setState({ send: "sending" });
+        setTimeout(() => this.setState({ send: "done" }), 1300);
+      },
+
+      onReplan: () => this.fire("KI-Vorschlag für KW 37 wird erstellt — du bestätigst danach."),
+      toast: this.state.toast,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

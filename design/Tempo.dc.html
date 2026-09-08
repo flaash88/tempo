@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="stylesheet" href="_ds/nocturne-60c16d8e-f385-46f7-82f9-f9ae2551355c/styles.css">
+  <link rel="stylesheet" href="tempo-tokens.css">
+  <script src="_ds/nocturne-60c16d8e-f385-46f7-82f9-f9ae2551355c/_ds_bundle.js"></script>
+  <style>
+    body { margin: 0; background: #0d0e15; }
+    a { color: #b5abfc; text-decoration: none; }
+    a:hover { color: #d2cefd; text-decoration: underline; }
+  </style>
+</helmet>
+
+<section id="t2" style="padding:44px 48px 72px;font-family:var(--font-body);color:var(--t-ink);border-bottom:1px solid var(--t-line)">
+
+  <div style="max-width:860px;display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:baseline;gap:12px">
+      <span style="font:600 10px ui-monospace,Menlo,monospace;padding:4px 8px;border-radius:var(--r-sm);background:var(--t-accent-soft);color:var(--t-accent-ink);letter-spacing:.08em">RUNDE 2</span>
+      <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Screens 2–6 · zwei neue Kachelzustände · Uhr-Sync im Plan</span>
+    </div>
+    <h1 style="margin:0;font-size:36px;font-weight:500;letter-spacing:-0.02em;line-height:1.08">Jede Kachel sagt, wie belastbar ihr Wert ist.</h1>
+    <p style="margin:0;font-size:var(--fs-body);line-height:1.6;color:var(--t-ink-2)">Zwei Zustände gelten jetzt für alle Screens: <span style="color:var(--t-ink)">Im Aufbau</span> (Fortschritt statt Wert, mit Verfügbarkeitsdatum) und der <span style="color:var(--t-ink)">Veraltungsmarker</span> (gestricheltes Datum direkt an der Kachel, unabhängig vom globalen Banner). Beide sind pro Kachel gesetzt, nicht pro Screen — die Zustandsspalte „Im Aufbau“ unten zeigt jeweils einen Screen mit gemischten Kacheln. KI-Fußzeilen führen Modell und Tokenzahl als Platzhalter <span style="font-family:ui-monospace,Menlo,monospace;color:var(--t-ink-2)">‹model›</span> / <span style="font-family:ui-monospace,Menlo,monospace;color:var(--t-ink-2)">‹tokens›</span>, weil die Werte zur Laufzeit aus der Config kommen.</p>
+  </div>
+
+  <div style="display:flex;align-items:baseline;gap:10px;margin:40px 0 16px">
+    <span style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">N</span>
+    <span style="font-size:var(--fs-metric-xs);font-weight:500">Die zwei neuen Kachelzustände</span>
+    <span style="font-size:var(--fs-label);color:var(--t-ink-3)">Vollwertig, nicht Platzhalter</span>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+    <div style="width:250px;background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:14px;display:flex;flex-direction:column;gap:4px">
+      <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Efficiency Factor</span>
+      <span style="font-size:var(--fs-metric-sm);font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:var(--ls-num)">1,72</span>
+      <span style="font-size:var(--fs-micro);color:var(--st-good)">+0,04 zu 30-Tage-Ø</span>
+      <span style="font-size:10.5px;color:var(--t-ink-3);padding-top:8px">Standard — Wert vorhanden und frisch</span>
+    </div>
+    <div style="width:250px;background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:14px;display:flex;flex-direction:column;gap:5px">
+      <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Efficiency Factor</span>
+      <span style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--t-accent-ink)">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M4 20V9M11 20V4M18 20v-7"></path></svg>Im Aufbau
+      </span>
+      <span style="font-size:var(--fs-metric-sm);font-weight:500;font-variant-numeric:tabular-nums;color:var(--t-ink-2);letter-spacing:var(--ls-num)">34<span style="font-size:var(--fs-micro);color:var(--t-ink-3);margin-left:3px">/ 42 Tagen</span></span>
+      <span style="display:block;height:3px;border-radius:var(--r-pill);background:var(--t-line);overflow:hidden"><span style="display:block;height:3px;width:81%;background:var(--t-accent-line)"></span></span>
+      <span style="font-size:var(--fs-micro);color:var(--t-ink-3)">verfügbar ab 12.10.</span>
+      <span style="font-size:10.5px;color:var(--t-ink-3);padding-top:6px">Im Aufbau — Fortschritt trägt die Kachel, Akzentlinie statt Wertfarbe</span>
+    </div>
+    <div style="width:250px;background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:14px;display:flex;flex-direction:column;gap:5px">
+      <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Efficiency Factor</span>
+      <span style="font-size:var(--fs-metric-sm);font-weight:500;font-variant-numeric:tabular-nums;color:var(--t-ink-2);letter-spacing:var(--ls-num)">1,68</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 5px;border:1px dashed var(--st-neutral);border-radius:var(--r-sm);font-size:11px;letter-spacing:.01em;color:var(--st-neutral);align-self:flex-start">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v5l3.5 2"></path></svg>Letzter Wert 18.08.
+      </span>
+      <span style="font-size:10.5px;color:var(--t-ink-3);padding-top:6px">Veraltet — gestrichelte Kante plus Datum, Wert bleibt lesbar</span>
+    </div>
+    <div style="width:250px;background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:14px;display:flex;flex-direction:column;gap:6px">
+      <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Efficiency Factor</span>
+      <span style="font-size:var(--fs-metric-sm);font-weight:500;color:var(--t-ink-3);letter-spacing:var(--ls-num)">—</span>
+      <span style="font-size:var(--fs-micro);line-height:1.4;color:var(--t-ink-3)">Keine Datenquelle verbunden</span>
+      <span style="font-size:10.5px;color:var(--t-ink-3);padding-top:6px">Leer — nichts sammelt sich, es gibt kein Datum zu nennen</span>
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:baseline;gap:10px;margin:48px 0 16px">
+    <span style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">S1</span>
+    <span style="font-size:var(--fs-metric-xs);font-weight:500">Screen 1 — Heute, nachgezogen</span>
+    <span style="font-size:var(--fs-label);color:var(--t-ink-3)">HRV frisch, Ruhepuls veraltet, Schlafphasen im Aufbau — drei Zustände in einer Kachelreihe</span>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start">
+    <div id="1g" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#1g" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-accent-soft);color:var(--t-accent-ink)">1g</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Gemischte Kachelzustände</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)">
+        <dc-import name="TempoHeute" state="aufbau" hint-size="390px,844px"></dc-import>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:baseline;gap:10px;margin:48px 0 16px">
+    <span style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">S2</span>
+    <span style="font-size:var(--fs-metric-xs);font-weight:500">Screen 2 — Aktivitätsdetail</span>
+    <span style="font-size:var(--fs-label);color:var(--t-ink-3)">Chart antippen und ziehen: Werte am Datenpunkt</span>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start">
+    <div id="2a" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#2a" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-accent-soft);color:var(--t-accent-ink)">2a</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Dark · Standard</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoAktivitaet" state="ready" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="2b" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#2b" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-accent-soft);color:var(--t-accent-ink)">2b</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Light · Standard</span></div>
+      <div data-theme="light" style="padding:9px;border-radius:52px;background:#d7dae6;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoAktivitaet" state="ready" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="2c" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#2c" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">2c</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Im Aufbau · GAP + EF, Decoupling veraltet</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoAktivitaet" state="aufbau" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="2d" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#2d" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">2d</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Ladezustand</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoAktivitaet" state="loading" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="2e" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#2e" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">2e</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Leer</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoAktivitaet" state="empty" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="2f" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#2f" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">2f</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Offline</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoAktivitaet" state="offline" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="2g" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#2g" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">2g</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Fehler</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoAktivitaet" state="error" hint-size="390px,844px"></dc-import></div>
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:baseline;gap:10px;margin:48px 0 16px">
+    <span style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">S3</span>
+    <span style="font-size:var(--fs-metric-xs);font-weight:500">Screen 3 — Trends</span>
+    <span style="font-size:var(--fs-label);color:var(--t-ink-3)">6 / 12 / 52 Wochen umschaltbar, Formkurve scrubbar</span>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start">
+    <div id="3a" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#3a" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-accent-soft);color:var(--t-accent-ink)">3a</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Standard · Monotonie-Warnung</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoTrends" state="ready" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="3b" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#3b" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">3b</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Im Aufbau · Marathonprognose, VO2max veraltet</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoTrends" state="aufbau" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="3c" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#3c" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">3c</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Ladezustand</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoTrends" state="loading" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="3d" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#3d" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">3d</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Leer</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoTrends" state="empty" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="3e" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#3e" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">3e</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Offline</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoTrends" state="offline" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="3f" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#3f" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">3f</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Fehler</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoTrends" state="error" hint-size="390px,844px"></dc-import></div>
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:baseline;gap:10px;margin:48px 0 16px">
+    <span style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">S4</span>
+    <span style="font-size:var(--fs-metric-xs);font-weight:500">Screen 4 — Plan</span>
+    <span style="font-size:var(--fs-label);color:var(--t-ink-3)">Mittwoch antippen: Detail mit Intervallstruktur, Schritte ändern, an Uhr senden</span>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start">
+    <div id="4a" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#4a" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-accent-soft);color:var(--t-accent-ink)">4a</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Woche · Uhr-Sync je Einheit</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoPlan" state="ready" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="4b" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#4b" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">4b</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Im Aufbau · Zielpace, Long Run veraltet</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoPlan" state="aufbau" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="4c" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#4c" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">4c</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Ladezustand</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoPlan" state="loading" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="4d" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#4d" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">4d</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Leer</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoPlan" state="empty" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="4e" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#4e" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">4e</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Offline · Übertragung wartet</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoPlan" state="offline" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="4f" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#4f" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">4f</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Fehler</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoPlan" state="error" hint-size="390px,844px"></dc-import></div>
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:baseline;gap:10px;margin:48px 0 16px">
+    <span style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">S5</span>
+    <span style="font-size:var(--fs-metric-xs);font-weight:500">Screen 5 — Coach</span>
+    <span style="font-size:var(--fs-label);color:var(--t-ink-3)">Chips antippen: Frage geht raus, Antwort mit Inline-Chart</span>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start">
+    <div id="5a" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#5a" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-accent-soft);color:var(--t-accent-ink)">5a</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Dialog · Standard</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoCoach" state="ready" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="5b" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#5b" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">5b</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Im Aufbau · Datenbasis-Hinweis in der Antwort</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoCoach" state="aufbau" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="5c" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#5c" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">5c</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Ladezustand</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoCoach" state="loading" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="5d" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#5d" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">5d</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Leer</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoCoach" state="empty" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="5e" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#5e" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">5e</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Offline · Eingabe gesperrt</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoCoach" state="offline" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="5f" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#5f" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">5f</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Fehler · Rate Limit</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoCoach" state="error" hint-size="390px,844px"></dc-import></div>
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:baseline;gap:10px;margin:48px 0 16px">
+    <span style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">S6</span>
+    <span style="font-size:var(--fs-metric-xs);font-weight:500">Screen 6 — Einstellungen</span>
+    <span style="font-size:var(--fs-label);color:var(--t-ink-3)">Zonenmodell umschaltbar, Grenzen rechnen mit</span>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start">
+    <div id="6a" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#6a" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-accent-soft);color:var(--t-accent-ink)">6a</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Standard · Uhr-Token abgelaufen</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoEinstellungen" state="ready" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="6b" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#6b" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">6b</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Im Aufbau · Tokenverbrauch</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoEinstellungen" state="aufbau" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="6c" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#6c" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">6c</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Ladezustand</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoEinstellungen" state="loading" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="6d" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#6d" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">6d</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Leer · Erstkonfiguration</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoEinstellungen" state="empty" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="6e" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#6e" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">6e</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Offline</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoEinstellungen" state="offline" hint-size="390px,844px"></dc-import></div>
+    </div>
+    <div id="6f" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#6f" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">6f</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Fehler · 401</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)"><dc-import name="TempoEinstellungen" state="error" hint-size="390px,844px"></dc-import></div>
+    </div>
+  </div>
+
+  <p style="margin:36px 0 0;font-size:var(--fs-label);line-height:1.6;color:var(--t-ink-3);max-width:820px">Nächste Schritte: „<a href="#4a" style="color:var(--t-accent-ink)">4a</a> — Schrittliste mit Zonenwechsel je Segment“ · „Veraltungsmarker ab 14 Tagen auf Warnung hochziehen“ · „Screen 2 Splittabelle mit Zonen-Spalte“</p>
+</section>
+
+<section id="t1" style="padding:44px 48px 72px;font-family:var(--font-body);color:var(--t-ink)">
+
+  <div style="max-width:820px;display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:baseline;gap:12px">
+      <span style="font:600 10px ui-monospace,Menlo,monospace;padding:4px 8px;border-radius:var(--r-sm);background:var(--t-accent-soft);color:var(--t-accent-ink);letter-spacing:.08em">RUNDE 1</span>
+      <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Tempo · Design Tokens + Screen 1 „Heute“ · iPhone 390×844</span>
+    </div>
+    <h1 style="margin:0;font-size:40px;font-weight:500;letter-spacing:-0.02em;line-height:1.06">Bereitschaft in 30 Sekunden — Zahl, Treiber, Begründung.</h1>
+    <p style="margin:0;font-size:var(--fs-body);line-height:1.6;color:var(--t-ink-2)">Screen 1 ist als Morgen-Screen gebaut: die Zahl trägt die Hierarchie, darunter die drei Treiber, die sie erzeugen, dann der Formzustand, dann die KI-Empfehlung mit aufklappbarer Begründung. Primäraktionen (Begründung öffnen, Einheit abhaken) liegen im unteren Drittel, alle Touchziele ≥ 44 pt, Safe Areas für Notch und Home-Indicator eingerechnet. Die Tokens liegen als <span style="color:var(--t-ink)">tempo-tokens.css</span> im Projekt — Dark Mode ist <span style="color:var(--t-ink)">:root</span>, Light Mode ein <span style="color:var(--t-ink)">[data-theme="light"]</span>-Override.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      <span style="font-size:var(--fs-micro);padding:5px 9px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">Interaktiv: Begründung aufklappen</span>
+      <span style="font-size:var(--fs-micro);padding:5px 9px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">Interaktiv: Einheit abhaken</span>
+      <span style="font-size:var(--fs-micro);padding:5px 9px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">Interaktiv: Tab-Bar, Retry</span>
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:baseline;gap:10px;margin:44px 0 18px">
+    <span style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">A</span>
+    <span style="font-size:var(--fs-metric-xs);font-weight:500">Screen 1 — Heute</span>
+    <span style="font-size:var(--fs-label);color:var(--t-ink-3)">Dark und Light, dazu die vier Zustände</span>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start">
+
+    <div id="1a" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#1a" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-accent-soft);color:var(--t-accent-ink)">1a</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Dark · Standard</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)">
+        <dc-import name="TempoHeute" state="ready" hint-size="390px,844px"></dc-import>
+      </div>
+    </div>
+
+    <div id="1b" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#1b" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-accent-soft);color:var(--t-accent-ink)">1b</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Light · Standard</span></div>
+      <div data-theme="light" style="padding:9px;border-radius:52px;background:#d7dae6;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)">
+        <dc-import name="TempoHeute" state="ready" hint-size="390px,844px"></dc-import>
+      </div>
+    </div>
+
+    <div id="1c" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#1c" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">1c</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Ladezustand · Skeleton</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)">
+        <dc-import name="TempoHeute" state="loading" hint-size="390px,844px"></dc-import>
+      </div>
+    </div>
+
+    <div id="1d" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#1d" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">1d</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Leer · noch keine Daten</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)">
+        <dc-import name="TempoHeute" state="empty" hint-size="390px,844px"></dc-import>
+      </div>
+    </div>
+
+    <div id="1e" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#1e" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">1e</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Offline · letzter Stand</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)">
+        <dc-import name="TempoHeute" state="offline" hint-size="390px,844px"></dc-import>
+      </div>
+    </div>
+
+    <div id="1f" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px"><a href="#1f" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">1f</a><span style="font-size:var(--fs-label);color:var(--t-ink-2)">Fehler · Sync fehlgeschlagen</span></div>
+      <div style="padding:9px;border-radius:52px;background:#22242e;box-shadow:0 0 0 1px rgba(233,233,237,.10), 0 26px 60px rgba(0,0,0,.55)">
+        <dc-import name="TempoHeute" state="error" hint-size="390px,844px"></dc-import>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:baseline;gap:10px;margin:56px 0 18px">
+    <span style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">B</span>
+    <span style="font-size:var(--fs-metric-xs);font-weight:500">Design Tokens</span>
+    <span style="font-size:var(--fs-label);color:var(--t-ink-3)">tempo-tokens.css · Dark = :root, Light = [data-theme="light"]</span>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start">
+
+    <div style="width:460px;background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:18px 20px 20px;display:flex;flex-direction:column;gap:16px">
+      <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Grund, Flächen, Ink, Akzent</span>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px">
+        <div style="display:flex;flex-direction:column;gap:5px"><span style="height:46px;border-radius:var(--r-md);background:#161826;box-shadow:0 0 0 1px rgba(233,233,237,.12)"></span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">--t-bg<br>#161826</span></div>
+        <div style="display:flex;flex-direction:column;gap:5px"><span style="height:46px;border-radius:var(--r-md);background:#1e2130;box-shadow:0 0 0 1px rgba(233,233,237,.12)"></span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">--t-surface<br>#1e2130</span></div>
+        <div style="display:flex;flex-direction:column;gap:5px"><span style="height:46px;border-radius:var(--r-md);background:#262a3a;box-shadow:0 0 0 1px rgba(233,233,237,.12)"></span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">--t-surface-2<br>#262a3a</span></div>
+        <div style="display:flex;flex-direction:column;gap:5px"><span style="height:46px;border-radius:var(--r-md);background:#9184d9"></span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">--t-accent<br>#9184d9</span></div>
+        <div style="display:flex;flex-direction:column;gap:5px"><span style="height:46px;border-radius:var(--r-md);background:#e9e9ed"></span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">--t-ink<br>#e9e9ed</span></div>
+        <div style="display:flex;flex-direction:column;gap:5px"><span style="height:46px;border-radius:var(--r-md);background:#b2b6ca"></span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">--t-ink-2<br>#b2b6ca</span></div>
+        <div style="display:flex;flex-direction:column;gap:5px"><span style="height:46px;border-radius:var(--r-md);background:#8a8ea3"></span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">--t-ink-3<br>#8a8ea3</span></div>
+        <div style="display:flex;flex-direction:column;gap:5px"><span style="height:46px;border-radius:var(--r-md);background:#b5abfc"></span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">--t-accent-ink<br>#b5abfc</span></div>
+      </div>
+
+      <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Zonenpalette — fix über alle Charts</span>
+      <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px">
+        <div style="display:flex;flex-direction:column;gap:5px"><span style="height:40px;border-radius:var(--r-md);background:#5c86b3"></span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">Z1 Reko<br>#5c86b3</span></div>
+        <div style="display:flex;flex-direction:column;gap:5px"><span style="height:40px;border-radius:var(--r-md);background:#4fa08c"></span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">Z2 GA<br>#4fa08c</span></div>
+        <div style="display:flex;flex-direction:column;gap:5px"><span style="height:40px;border-radius:var(--r-md);background:#b3a95c"></span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">Z3 Tempo<br>#b3a95c</span></div>
+        <div style="display:flex;flex-direction:column;gap:5px"><span style="height:40px;border-radius:var(--r-md);background:#cf8352"></span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">Z4 Schwelle<br>#cf8352</span></div>
+        <div style="display:flex;flex-direction:column;gap:5px"><span style="height:40px;border-radius:var(--r-md);background:#c05777"></span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">Z5 VO2<br>#c05777</span></div>
+      </div>
+      <div style="display:flex;height:14px;border-radius:var(--r-sm);overflow:hidden">
+        <span style="flex:12;background:#5c86b3"></span><span style="flex:46;background:#4fa08c"></span><span style="flex:22;background:#b3a95c"></span><span style="flex:14;background:#cf8352"></span><span style="flex:6;background:#c05777"></span>
+      </div>
+
+      <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Statuslogik</span>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px">
+        <div style="display:flex;flex-direction:column;gap:5px"><span style="height:34px;border-radius:var(--r-md);background:#59c08d"></span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">gut<br>#59c08d</span></div>
+        <div style="display:flex;flex-direction:column;gap:5px"><span style="height:34px;border-radius:var(--r-md);background:#9397ab"></span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">neutral<br>#9397ab</span></div>
+        <div style="display:flex;flex-direction:column;gap:5px"><span style="height:34px;border-radius:var(--r-md);background:#e0b25f"></span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">Vorsicht<br>#e0b25f</span></div>
+        <div style="display:flex;flex-direction:column;gap:5px"><span style="height:34px;border-radius:var(--r-md);background:#e2645f"></span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">Warnung<br>#e2645f</span></div>
+      </div>
+    </div>
+
+    <div style="width:400px;background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:18px 20px 20px;display:flex;flex-direction:column;gap:14px">
+      <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Typo-Skala · Inter, tabular-nums</span>
+      <div style="display:flex;align-items:baseline;gap:12px;padding-bottom:9px;border-bottom:1px solid var(--t-line)"><span style="font-size:64px;line-height:1;font-weight:500;letter-spacing:-0.02em;font-variant-numeric:tabular-nums">61</span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">--fs-hero 64/500</span></div>
+      <div style="display:flex;align-items:baseline;gap:12px;padding-bottom:9px;border-bottom:1px solid var(--t-line)"><span style="font-size:34px;line-height:1;font-weight:500;letter-spacing:-0.02em;font-variant-numeric:tabular-nums">12,4 km</span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">--fs-metric 34/500</span></div>
+      <div style="display:flex;align-items:baseline;gap:12px;padding-bottom:9px;border-bottom:1px solid var(--t-line)"><span style="font-size:22px;line-height:1.1;font-weight:500;font-variant-numeric:tabular-nums">4:24 /km</span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">--fs-metric-sm 22/500</span></div>
+      <div style="display:flex;align-items:baseline;gap:12px;padding-bottom:9px;border-bottom:1px solid var(--t-line)"><span style="font-size:15px">Lockerer Dauerlauf, Zone 2</span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">--fs-body 15/400</span></div>
+      <div style="display:flex;align-items:baseline;gap:12px;padding-bottom:9px;border-bottom:1px solid var(--t-line)"><span style="font-size:13px;color:var(--t-ink-2)">Begründung, Fließtext in Karten</span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">--fs-sub 13/400</span></div>
+      <div style="display:flex;align-items:baseline;gap:12px"><span style="font-size:10.5px;letter-spacing:.10em;text-transform:uppercase;color:var(--t-ink-3)">Formzustand</span><span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace">--fs-micro 10.5/400</span></div>
+
+      <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3);padding-top:4px">Spacing 4er-Raster · Radien</span>
+      <div style="display:flex;align-items:flex-end;gap:6px">
+        <span style="width:4px;height:4px;background:var(--t-accent-line)"></span><span style="width:8px;height:8px;background:var(--t-accent-line)"></span><span style="width:12px;height:12px;background:var(--t-accent-line)"></span><span style="width:16px;height:16px;background:var(--t-accent-line)"></span><span style="width:20px;height:20px;background:var(--t-accent-line)"></span><span style="width:28px;height:28px;background:var(--t-accent-line)"></span><span style="width:40px;height:40px;background:var(--t-accent-line)"></span>
+        <span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace;padding-left:6px">4 · 8 · 12 · 16 · 20 · 28 · 40</span>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:8px">
+        <span style="width:34px;height:34px;border-radius:4px;box-shadow:0 0 0 1px var(--t-line-strong)"></span><span style="width:34px;height:34px;border-radius:8px;box-shadow:0 0 0 1px var(--t-line-strong)"></span><span style="width:34px;height:34px;border-radius:14px;box-shadow:0 0 0 1px var(--t-line-strong)"></span><span style="width:34px;height:34px;border-radius:20px;box-shadow:0 0 0 1px var(--t-line-strong)"></span><span style="width:34px;height:34px;border-radius:999px;box-shadow:0 0 0 1px var(--t-line-strong)"></span>
+        <span style="font-size:10.5px;color:var(--t-ink-3);font-family:ui-monospace,Menlo,monospace;padding-left:6px">4 · 8 · 14 · 20 · pill</span>
+      </div>
+    </div>
+
+    <div style="width:470px;background:var(--t-bg-deep);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+      <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Übernahme in React + Tailwind (v4)</span>
+      <div style="font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:1.6;color:var(--t-ink-2);white-space:pre-wrap">/* 1. tempo-tokens.css importieren (src/styles/) */
+@import "./tempo-tokens.css";
+
+/* 2. Tokens als Tailwind-Theme registrieren */
+@theme {
+  --color-bg:        var(--t-bg);
+  --color-surface:   var(--t-surface);
+  --color-surface-2: var(--t-surface-2);
+  --color-ink:       var(--t-ink);
+  --color-ink-2:     var(--t-ink-2);
+  --color-ink-3:     var(--t-ink-3);
+  --color-accent:    var(--t-accent);
+  --color-z1: var(--z1);  --color-z4: var(--z4);
+  --color-z2: var(--z2);  --color-z5: var(--z5);
+  --color-z3: var(--z3);
+  --color-good: var(--st-good);
+  --color-caution: var(--st-caution);
+  --color-warn: var(--st-warn);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+}
+
+/* 3. Light Mode: data-theme am &lt;html&gt; umschalten */
+document.documentElement.dataset.theme = "light";
+
+/* 4. Ziffern immer tabellarisch */
+.num { font-variant-numeric: tabular-nums;
+       letter-spacing: var(--ls-num); }</div>
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:baseline;gap:10px;margin:56px 0 18px">
+    <span style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:var(--r-sm);background:var(--t-surface-2);color:var(--t-ink-2)">C</span>
+    <span style="font-size:var(--fs-metric-xs);font-weight:500">Begründung</span>
+    <span style="font-size:var(--fs-label);color:var(--t-ink-3)">Farbe, Typografie, Annahmen</span>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start;max-width:1360px">
+    <div style="width:430px;display:flex;flex-direction:column;gap:8px">
+      <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-accent-ink)">Farbe</span>
+      <p style="margin:0;font-size:var(--fs-sub);line-height:1.6;color:var(--t-ink-2)">Der Grund ist Nocturnes #161826 — ein blaugrauer Ton, dunkel genug für 6 Uhr früh, aber nicht schwarz, damit die Flächenstufen (#1e2130 Karte, #262a3a Chip) ohne Rahmen unterscheidbar bleiben. Ink liegt bei #e9e9ed auf #161826, also rund 14:1 — bei Sonnenlicht lesbar.</p>
+      <p style="margin:0;font-size:var(--fs-sub);line-height:1.6;color:var(--t-ink-2)">Drei Farbrollen, streng getrennt: der Akzent (Blurple #9184d9) gehört <span style="color:var(--t-ink)">nur</span> Aktionen und der KI — als Linie und Glow, nie als Fläche. Die Statuslogik (grün/neutral/amber/rot) bewertet, die Zonenpalette beschreibt. Deshalb wandert die Zonenreihe von kühl nach warm über Hues, die keiner Statusfarbe zu nah kommen: Z1 Blau, Z2 Grünblau, Z3 Oliv, Z4 Orange, Z5 Magenta — Z5 ist bewusst magenta statt rot, damit ein Warnbanner (#e2645f) neben einem Z5-Balken nicht wie dasselbe Signal aussieht.</p>
+      <p style="margin:0;font-size:var(--fs-sub);line-height:1.6;color:var(--t-ink-2)">Im Light Mode bleiben die Hues gleich, Zonen und Status gehen aber ~2 Stufen dunkler (#4fa08c → #2c7f6d), damit 4,5:1 auf #fbfbfe erhalten bleibt. Grund ist #eef0f7, nicht Weiß — Nocturne meidet reines Weiß, und der leichte Blaustich hält beide Modi als dieselbe App erkennbar.</p>
+    </div>
+    <div style="width:430px;display:flex;flex-direction:column;gap:8px">
+      <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-accent-ink)">Typografie</span>
+      <p style="margin:0;font-size:var(--fs-sub);line-height:1.6;color:var(--t-ink-2)">Inter durchgehend (aus Nocturne), Ziffern immer <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--t-ink)">tabular-nums</span> mit −0,02em: in Splittabellen und in Trend-Achsen springen die Spalten dann nicht. Gewicht 500 für alle Kennzahlen, 400 für Fließtext — mehr als 500 gibt es nicht, Hierarchie entsteht über Größe und Abstand.</p>
+      <p style="margin:0;font-size:var(--fs-sub);line-height:1.6;color:var(--t-ink-2)">Die Skala ist absichtlich lückenhaft: 64 (der eine Wert, der den Screen trägt) → 34 → 22 → 17 für Zahlen, 15/13 für Text, 10,5 uppercase mit 0,10em für Labels. Labels sind klein, nie fett und immer #8a8ea3 — sie sollen benennen, nicht konkurrieren. Einheiten (ms, bpm, /km) laufen als 12px hinter der Zahl mit, damit die Zahl allein die Vertikale bestimmt.</p>
+      <p style="margin:0;font-size:var(--fs-sub);line-height:1.6;color:var(--t-ink-2)">Untergrenzen, hart eingehalten: 10,5px für Uppercase-Labels, Achsen und Metadaten; 11px in gemischter Schreibweise für alles, was gelesen statt gescannt wird — Veraltungsmarker, Uhr-Sync-Zeile, Splittabellen-Kopf; ab 13px jeder Fließtext. Der Veraltungsmarker ist damit nicht mehr das kleinste Element seiner Kachel.</p>
+    </div>
+    <div style="width:400px;display:flex;flex-direction:column;gap:8px">
+      <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--st-caution)">Annahmen — bitte bestätigen</span>
+      <div style="display:flex;flex-direction:column;gap:9px;font-size:var(--fs-sub);line-height:1.55;color:var(--t-ink-2)">
+        <div style="display:flex;gap:9px"><span style="flex:none;width:2px;border-radius:999px;background:var(--st-caution)"></span><span>Der Bereitschaftswert steht auf 61 („eingeschränkt“, amber Ring), weil alle drei Treiber negativ abweichen. Ein Wert von 74 bei −8 ms HRV wäre unglaubwürdig.</span></div>
+        <div style="display:flex;gap:9px"><span style="flex:none;width:2px;border-radius:999px;background:var(--st-caution)"></span><span>KI-Kennzeichnung = Spark-Marke + Label + Modell/Token-Fußzeile in der aufgeklappten Begründung. Kein Avatar, keine Sprechblase.</span></div>
+        <div style="display:flex;gap:9px"><span style="flex:none;width:2px;border-radius:999px;background:var(--st-caution)"></span><span>Tab-Bar mit fünf Zielen: Heute, Trends, Plan, Coach, Mehr — Einstellungen liegen unter „Mehr“, weil sie selten gebraucht werden.</span></div>
+        <div style="display:flex;gap:9px"><span style="flex:none;width:2px;border-radius:999px;background:var(--st-caution)"></span><span>Offline zeigt die Zahlen weiter, nur auf 72 % Deckkraft plus Banner mit Zeitstempel. Fehler zeigt zusätzlich „Erneut“.</span></div>
+        <div style="display:flex;gap:9px"><span style="flex:none;width:2px;border-radius:999px;background:var(--st-caution)"></span><span>Spacing weicht von Nocturnes 0,7×-Dichte (2,8/5,6/8,4 px) auf ein 4er-Raster ab — Touch-Bedienung braucht die Luft.</span></div>
+      </div>
+      <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3);padding-top:8px">Für Runde 2 notiert</span>
+      <div style="font-size:var(--fs-sub);line-height:1.55;color:var(--t-ink-2)">Screen 4 „Plan“ erweitert: Uhr-Sync-Status je Einheit (auf Uhr / wird übertragen / nicht übertragen, mit Zeitstempel), Detailansicht mit Intervallstruktur als Balkengrafik (Dauer × Zielzone je Segment) und editierbarer Schrittliste, Aktion „An Uhr senden“ mit Bestätigungszustand.</div>
+      <div style="font-size:var(--fs-micro);line-height:1.5;color:var(--t-ink-3);padding-top:6px">Nächste Schritte: „Ring/Treiber-Layout so lassen, weiter mit 2–6“ · „Bereitschaft kompakter, KI-Karte nach oben“ · „Light Mode heller/kälter“</div>
+    </div>
+  </div>
+</section>
+
+</x-dc>
+</body>
+</html>
