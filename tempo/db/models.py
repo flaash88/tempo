@@ -271,9 +271,46 @@ class AiCall(Base):
     model: Mapped[str] = mapped_column(String(64), nullable=False)
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Cache reads and writes are billed differently from plain input, and a
+    # run of calls with zero cache reads is the only way to notice that the
+    # cached prefix is never being hit. Kept apart for both reasons.
+    cache_read_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cache_write_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     cost_eur: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
 
     __table_args__ = (Index("ix_ai_call_ts", "ts"),)
+
+
+class AiResponse(Base):
+    """A stored answer, so the same question is not paid for twice.
+
+    The key covers everything that went into the request: the endpoint, the
+    model, the system prompt and the feature document. Any change to a
+    number changes the document, and any change to the rules changes the
+    prompt, so a stale answer cannot be served — there is no expiry because
+    there is nothing for one to protect against.
+
+    The document is kept alongside the answer. Without it there is no way
+    to tell later what the model was actually looking at when it said what
+    it said.
+    """
+
+    __tablename__ = "ai_response"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    cache_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    endpoint: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow
+    )
+    as_of: Mapped[dt.date | None] = mapped_column(Date)
+    features_json: Mapped[str] = mapped_column(Text, nullable=False)
+    answer: Mapped[str] = mapped_column(Text, nullable=False)
+
+    __table_args__ = (
+        Index("ix_ai_response_endpoint_created", "endpoint", "created_at"),
+    )
 
 
 class PlannedWorkout(Base):
