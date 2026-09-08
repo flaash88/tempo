@@ -16,10 +16,6 @@ from tempo.api.app import create_app
 from tempo.config import Settings
 from tests import REPO_ROOT
 
-# Endpoints named in design/README.md that belong to the AI layer, which is
-# phase 5. Everything else in that file has to exist now.
-PHASE_5_PREFIX = "/api/ai/"
-
 # The endpoint list from docs/PLAN.md, phase 4.
 PLANNED = {
     ("get", "/api/today"),
@@ -34,6 +30,11 @@ PLANNED = {
     ("get", "/api/thresholds"),
     ("post", "/api/sync"),
     ("get", "/api/sync/status"),
+    # Phase 5.
+    ("post", "/api/ai/daily"),
+    ("post", "/api/ai/activity/{activity_id}"),
+    ("post", "/api/ai/plan-week"),
+    ("post", "/api/ai/chat"),
 }
 
 
@@ -75,26 +76,23 @@ def test_every_endpoint_the_plan_lists_exists(spec: dict[str, Any]) -> None:
 
 
 def test_every_endpoint_a_screen_reads_exists(spec: dict[str, Any]) -> None:
-    """Except the AI ones, which are phase 5."""
     paths = set(spec["paths"])
     missing = sorted(
         path
         for raw in documented_endpoints()
-        if not (path := normalise(raw)).startswith(PHASE_5_PREFIX)
-        and path.split("?")[0] not in paths
+        if (path := normalise(raw)).split("?")[0] not in paths
     )
 
     assert missing == []
 
 
-def test_the_ai_endpoints_are_still_to_come(spec: dict[str, Any]) -> None:
-    """Named by the design, built in phase 5 — stated rather than implied."""
-    ai_paths = {
-        path for path in documented_endpoints() if path.startswith(PHASE_5_PREFIX)
-    }
+def test_the_ai_answer_names_the_model_that_wrote_it(spec: dict[str, Any]) -> None:
+    """The footer in the design renders a model name; it comes from here."""
+    answer = spec["components"]["schemas"]["AiAnswerResponse"]["properties"]
 
-    assert ai_paths
-    assert not any(path in spec["paths"] for path in ai_paths)
+    assert "model" in answer
+    assert "budget" in answer
+    assert "cached" in answer
 
 
 def test_no_endpoint_returns_a_bare_number_where_a_metric_belongs(
