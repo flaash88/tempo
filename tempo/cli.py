@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import logging
+import math
 import sys
 from pathlib import Path
 
@@ -21,7 +22,10 @@ from tempo.ingest.errors import IngestError
 from tempo.ingest.garmin_optional import sync_garmin
 from tempo.ingest.sync import import_fit_directory, sync_intervals
 from tempo.logging import configure_logging
+from tempo.metrics.confidence import MetricResult
+from tempo.metrics.wellness import Baseline
 from tempo.recompute import recompute_all
+from tempo.snapshot import Snapshot, build_snapshot, pace_of
 
 log = logging.getLogger("tempo.cli")
 
@@ -72,14 +76,98 @@ def cmd_recompute(args: argparse.Namespace, settings: Settings) -> int:
     engine = engine_for(settings)
     try:
         report = recompute_all(engine)
+        snapshot = build_snapshot(engine)
     finally:
         engine.dispose()
+
     print(report.summary())
-    print(
-        "Belastungskennzahlen (TRIMP, hrTSS, rTSS) folgen in Phase 3 — "
-        "Tage mit Einheit stehen bis dahin auf null."
-    )
+    for note in report.notes:
+        print(f"  Hinweis: {note}")
+    print(_render_snapshot(snapshot))
     return 0
+
+
+def _render_metric(
+    label: str, result: MetricResult[object], rendered: str | None = None
+) -> str:
+    """One line per metric: the value, or how far along it is."""
+    if result.value is None:
+        line = f"{label}: noch nicht verfügbar ({result.have}/{result.required}"
+        if result.available_from is not None:
+            line += f", frühestens {result.available_from:%d.%m.%Y}"
+        line += ")"
+        if result.last_data_point is not None:
+            # In build-up *and* out of date: both apply per tile, and the
+            # date is what tells the athlete which of the two it is.
+            line += f" — letzter Wert {result.last_data_point:%d.%m.%Y}"
+    elif result.stale and result.last_data_point is not None:
+        # A stale value leads with its date; it is not the current state.
+        line = (
+            f"{label}: Stand {result.last_data_point:%d.%m.%Y} — "
+            f"{rendered or result.value}"
+        )
+    else:
+        line = (
+            f"{label}: {rendered or result.value} (Konfidenz {result.confidence:.2f})"
+        )
+    return line
+
+
+def _render_baseline(result: MetricResult[Baseline]) -> str | None:
+    """A baseline as its band, in the units it was built in."""
+    baseline = result.value
+    if baseline is None:
+        return None
+    if baseline.log_transformed:
+        low, high = math.exp(baseline.lower), math.exp(baseline.upper)
+        middle = math.exp(baseline.mean)
+    else:
+        low, high, middle = baseline.lower, baseline.upper, baseline.mean
+    return f"{middle:.1f} (Band {low:.1f} bis {high:.1f}, {baseline.days} Tage)"
+
+
+def _render_critical_speed(cs_m_s: float, d_prime_m: float) -> str:
+    pace = pace_of(cs_m_s)
+    if pace is None:
+        return f"{cs_m_s:.2f} m/s"
+    return f"{int(pace) // 60}:{int(pace) % 60:02d} min/km, D' {d_prime_m:.0f} m"
+
+
+def _render_snapshot(snapshot: Snapshot) -> str:
+    """The headline metrics, as the interface would show them."""
+    form = snapshot.form.value
+    critical = snapshot.critical_speed.value
+    rows = [
+        _render_metric("Bereitschaft", snapshot.readiness),
+        _render_metric(
+            "Formkurve",
+            snapshot.form,
+            None
+            if form is None
+            else f"CTL {form.ctl:.1f}, ATL {form.atl:.1f}, Form {form.tsb:+.1f}",
+        ),
+        _render_metric(
+            "ACWR",
+            snapshot.acwr,
+            None if snapshot.acwr.value is None else f"{snapshot.acwr.value:.2f}",
+        ),
+        _render_metric("HFV-Baseline", snapshot.hrv, _render_baseline(snapshot.hrv)),
+        _render_metric(
+            "Ruhe-HF-Baseline",
+            snapshot.resting_hr,
+            _render_baseline(snapshot.resting_hr),
+        ),
+        _render_metric(
+            "Critical Speed",
+            snapshot.critical_speed,
+            None
+            if critical is None
+            else _render_critical_speed(critical.cs_m_s, critical.d_prime_m),
+        ),
+    ]
+    if snapshot.hrv_source_field:
+        rows.append(f"HFV-Quellfeld: {snapshot.hrv_source_field}")
+    return "\n".join(rows)
 
 
 def cmd_import_dir(args: argparse.Namespace, settings: Settings) -> int:

@@ -56,7 +56,9 @@ def test_recompute_on_an_empty_database_succeeds(
     assert main(["recompute", "--all"]) == 0
     output = capsys.readouterr().out
     assert "no data to recompute" in output
-    assert "Phase 3" in output
+    # Even with nothing stored, every metric reports its progress.
+    assert "Bereitschaft: noch nicht verfügbar (0/14" in output
+    assert "Formkurve: noch nicht verfügbar (0/42" in output
 
 
 def test_import_dir_rejects_a_path_that_is_not_a_directory(
