@@ -346,11 +346,12 @@ class IntervalsClient:
         path: str,
         *,
         params: dict[str, str] | None = None,
+        json: Any = None,
     ) -> httpx.Response:
         last_error: Exception | None = None
         for attempt in range(1, self.retry.max_attempts + 1):
             try:
-                response = self._client.request(method, path, params=params)
+                response = self._client.request(method, path, params=params, json=json)
             except httpx.TransportError as exc:
                 # A dropped connection is worth one more try; the message
                 # never carries the credential, which lives in a header.
@@ -478,6 +479,41 @@ class IntervalsClient:
             # The API answers a single day as an object rather than a list.
             return [data]
         return self._as_payload_list(data, path)
+
+    def create_event(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Put one session in the athlete's calendar.
+
+        The calendar is what Garmin reads, so this is the whole of the
+        write-back: an event here becomes a workout on the watch at the
+        next sync. ``external_id`` travels with the payload as the
+        idempotency key.
+        """
+        path = f"/athlete/{self.athlete_id}/events"
+        return self._write_json("POST", path, payload)
+
+    def update_event(self, event_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Change an event Tempo already created.
+
+        Used instead of a second POST when the session has been edited, so
+        a changed workout replaces itself rather than appearing twice in
+        the same day.
+        """
+        path = f"/athlete/{self.athlete_id}/events/{event_id}"
+        return self._write_json("PUT", path, payload)
+
+    def _write_json(
+        self, method: str, path: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        response = self._request(method, path, json=payload)
+        if not response.content:
+            return {}
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise IntervalsApiError(f"{path} did not return JSON") from exc
+        if not isinstance(body, dict):
+            raise IntervalsApiError(f"{path} did not return an object")
+        return body
 
     def list_events(self, oldest: dt.date, newest: dt.date) -> list[dict[str, Any]]:
         path = f"/athlete/{self.athlete_id}/events"

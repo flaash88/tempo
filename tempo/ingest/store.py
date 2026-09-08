@@ -225,7 +225,18 @@ def upsert_planned_workouts(
             existing = PlannedWorkout(id=entry.id)
             session.add(existing)
 
-        existing.id = entry.id
+        # A session Tempo pushed comes back through this same read as an
+        # event of the source's. It keeps its own identity and its
+        # write-back bookkeeping: the confirmation the athlete gave and
+        # the transfer that already happened are facts about this row, not
+        # about the calendar, and re-reading the calendar does not undo
+        # them. What the read does add is the id the event got at the
+        # source, which is what a later change is sent to.
+        ours = existing.source == DataSource.TEMPO
+        if ours:
+            existing.remote_event_id = entry.id
+        else:
+            existing.id = entry.id
         existing.date = entry.date
         existing.category = entry.category
         existing.sport = entry.sport
@@ -236,7 +247,8 @@ def upsert_planned_workouts(
         existing.target_load = entry.target_load
         existing.workout_doc = entry.workout_doc
         existing.external_id = entry.external_id
-        existing.source = source
+        if not ours:
+            existing.source = source
         existing.updated_at = utcnow()
         stored += 1
     return stored
