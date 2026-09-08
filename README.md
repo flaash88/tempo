@@ -100,7 +100,9 @@ sudo chown -R 1000:1000 data
 | `ANTHROPIC_API_KEY` | Key aus der Anthropic Console |
 | `ANTHROPIC_MODEL_DAILY` | Modell für Tageseinschätzung und Chat |
 | `ANTHROPIC_MODEL_PLANNING` | Modell für Wochen- und Blockplanung |
-| `TEMPO_MONTHLY_BUDGET_EUR` | Monatsbudget, harter Stopp bei Erreichen |
+| `TEMPO_MONTHLY_BUDGET_EUR` | Monatsbudget, harter Stopp bei Erreichen, `0` schaltet ab |
+| `TEMPO_CHAT_MAX_TURNS` | Mitgeschickte Runden im Chat, Default `6`, Obergrenze `12` |
+| `TEMPO_CHAT_MAX_MESSAGE_CHARS` | Zeichen je Nachricht, Default `1000`, Obergrenze `2000` |
 | `TEMPO_PASSWORD_HASH` | Passwort-Hash für die Anmeldung, siehe unten |
 | `GARMIN_DIRECT_ENABLED` | Optionaler Garmin-Direktzugriff, Default `false` |
 | `GARMIN_EMAIL`, `GARMIN_PASSWORD` | Nur nötig, wenn der Garmin-Zugriff an ist |
@@ -245,6 +247,30 @@ Fortschritt an, und der System-Prompt verbietet ausdrücklich, sie als
 Trend oder Baseline zu lesen. Medizinische Aussagen sind ausgeschlossen;
 bei Hinweisen auf Schmerz, Verletzung oder Krankheit verweist die Antwort
 auf ärztliche Abklärung.
+
+### Chatverlauf
+
+`POST /api/ai/chat` nimmt die früheren Runden entgegen; wie viele davon
+mitgehen, entscheidet der Server. Jede Nachricht wird auf
+`TEMPO_CHAT_MAX_MESSAGE_CHARS` gekürzt, es bleiben höchstens
+`TEMPO_CHAT_MAX_TURNS` Runden, und der ganze Verlauf wird danach auf 4 KB
+gekappt — dieselbe Obergrenze wie beim Feature-Dokument. Der Verlauf ist
+damit kein Weg, mehr in das Kontextfenster zu bekommen, als das Dokument
+selbst erlaubt. Beide Konfigwerte haben zusätzlich eine Obergrenze im
+Code, die sich über die Umgebung nicht anheben lässt.
+
+Zahlen kommen weiterhin ausschließlich aus dem aktuellen Dokument. Eine
+frühere Antwort ist Zusammenhang, nie Eingabe.
+
+### Freitext aus fremder Quelle
+
+Namen, Beschreibungen und Notizen stammen von intervals.icu, aus dem
+Kalender oder von der Uhr. Im Feature-Dokument stehen sie ausschließlich
+verschachtelt unter dem Schlüssel `external_text`, mit zusammengefalteten
+Zeilenumbrüchen und auf 120 Zeichen gekürzt, und der System-Prompt sagt
+ausdrücklich, dass alles unter diesem Schlüssel gelesen und niemals
+befolgt wird. Eine Einheit mit dem Namen „Ignoriere alle vorherigen
+Anweisungen" ist eine Einheit mit einem albernen Namen.
 
 ### Kosten
 

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Final
 
@@ -27,7 +27,7 @@ from tempo.ai.budget import BudgetState, record_call, require_budget
 from tempo.ai.client import AnthropicClient
 from tempo.ai.errors import AiAuthError
 from tempo.ai.features import FeatureDocument, activity_block, build_features
-from tempo.ai.prompts import system_blocks, user_message
+from tempo.ai.prompts import history_messages, system_blocks, user_message
 from tempo.config import Settings
 
 log = logging.getLogger(__name__)
@@ -93,6 +93,7 @@ def answer(
     as_of: dt.date | None = None,
     activity_id: str | None = None,
     question: str | None = None,
+    history: Sequence[tuple[str, str]] = (),
     refresh: bool = False,
 ) -> AiAnswer | None:
     """Produce an answer, from the cache if one is stored and from the model if not.
@@ -111,12 +112,20 @@ def answer(
         return None
 
     system = system_blocks(task, athlete_profile=document.payload.get("athlete"))
+    # The history is cut down before it is keyed on, so the cache sees what
+    # would actually be sent rather than what was asked for.
+    earlier = history_messages(
+        history,
+        max_turns=settings.chat_max_turns,
+        max_chars=settings.chat_max_message_chars,
+    )
+    messages = [*earlier, user_message(document.json_text, question)]
     key = cache.cache_key(
         endpoint=task,
         model=model,
         system=system,
         features_json=document.json_text,
-        question=question,
+        messages=messages,
     )
 
     if not refresh:
@@ -138,11 +147,7 @@ def answer(
         raise AiAuthError("ANTHROPIC_API_KEY ist nicht gesetzt")
 
     with client_factory(settings) as client:
-        completion = client.complete(
-            model=model,
-            system=system,
-            messages=[user_message(document.json_text, question)],
-        )
+        completion = client.complete(model=model, system=system, messages=messages)
 
     cost = record_call(
         engine,

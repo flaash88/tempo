@@ -15,6 +15,7 @@ there is nothing left for a timer to protect against.
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import Sequence
 from dataclasses import dataclass
 from hashlib import blake2b
 from typing import Any
@@ -41,11 +42,16 @@ def cache_key(
     model: str,
     system: list[dict[str, Any]],
     features_json: str,
-    question: str | None = None,
+    messages: Sequence[dict[str, Any]] = (),
 ) -> str:
-    """A stable digest of the whole request."""
+    """A stable digest of the whole request.
+
+    The messages are hashed as they will be sent, history included, so two
+    questions that differ only in what came before them are two different
+    answers rather than one served twice.
+    """
     digest = blake2b(digest_size=32)
-    for part in (endpoint, model, question or ""):
+    for part in (endpoint, model):
         digest.update(part.encode("utf-8"))
         digest.update(b"\x00")
     for block in system:
@@ -53,6 +59,11 @@ def cache_key(
         if isinstance(text, str):
             digest.update(text.encode("utf-8"))
             digest.update(b"\x00")
+    for message in messages:
+        digest.update(str(message.get("role", "")).encode("utf-8"))
+        digest.update(b"\x00")
+        digest.update(str(message.get("content", "")).encode("utf-8"))
+        digest.update(b"\x00")
     digest.update(features_json.encode("utf-8"))
     return digest.hexdigest()
 

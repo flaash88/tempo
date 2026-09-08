@@ -18,6 +18,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from tempo.config import MAX_CHAT_MESSAGE_CHARS, MAX_CHAT_TURNS
+
 
 class MetricEnvelope[T](BaseModel):
     """A single metric together with how much it can be trusted."""
@@ -515,10 +517,27 @@ class AiBudgetError(BaseModel):
     budget: AiBudgetState
 
 
+class ChatTurn(BaseModel):
+    """One earlier message. Context, never a source of numbers."""
+
+    model_config = {"extra": "forbid"}
+
+    role: Literal["user", "assistant"]
+    text: str = Field(min_length=1, max_length=MAX_CHAT_MESSAGE_CHARS)
+
+
 class AiChatRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
-    question: str = Field(min_length=1, max_length=2000)
+    question: str = Field(min_length=1, max_length=MAX_CHAT_MESSAGE_CHARS)
+    history: list[ChatTurn] = Field(
+        default_factory=list,
+        max_length=MAX_CHAT_TURNS,
+        description=(
+            "Earlier turns, oldest first. Capped again server-side by the "
+            "configured limits and by a hard ceiling on the whole history."
+        ),
+    )
 
 
 class SettingsUpdate(BaseModel):

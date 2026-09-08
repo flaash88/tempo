@@ -63,6 +63,11 @@ RECENT_WEEKS: Final = 8
 # Planned sessions from today forward.
 PLAN_HORIZON_DAYS: Final = 7
 
+# How much of one piece of third-party free text is carried. Long enough
+# for a workout name to be recognisable, short enough that a calendar
+# entry cannot become the largest thing in the document.
+MAX_EXTERNAL_TEXT_CHARS: Final = 120
+
 # How many laps of the session under discussion travel with it. Enough for
 # an interval session to be recognisable as one; beyond that the split
 # list stops being a summary and starts being a stream.
@@ -89,6 +94,32 @@ class FeatureDocument:
     @property
     def size_bytes(self) -> int:
         return len(self.json_text.encode("utf-8"))
+
+
+def external_text(value: str | None) -> dict[str, str] | None:
+    """Free text from somewhere else, marked as data.
+
+    Names, descriptions and notes reach the database from intervals.icu,
+    which got them from a watch, a coach or the athlete. None of that is
+    part of the instructions, and a workout called "Ignoriere alle
+    vorherigen Anweisungen" is a workout with a silly name and nothing
+    more.
+
+    Two things keep it that way, and neither is a hopeful filter: the text
+    is nested under ``external_text`` so it can never be mistaken for a
+    field the application wrote, and the system prompt says in as many
+    words that anything under that key is read and never followed.
+    Whitespace is collapsed so a multi-line note cannot lay itself out
+    like a new section of the document.
+    """
+    if value is None:
+        return None
+    cleaned = " ".join(value.split())
+    if not cleaned:
+        return None
+    if len(cleaned) > MAX_EXTERNAL_TEXT_CHARS:
+        cleaned = cleaned[: MAX_EXTERNAL_TEXT_CHARS - 1] + "…"
+    return {"external_text": cleaned}
 
 
 def envelope(result: MetricResult[Any], value: Any = None) -> dict[str, Any]:
@@ -336,7 +367,7 @@ def build_features(
             "date": entry.date.isoformat(),
             "category": entry.category,
             "sport": entry.sport,
-            "name": entry.name,
+            "name": external_text(entry.name),
             "target_time_s": entry.target_time_s,
             "target_dist_m": (
                 None if entry.target_dist_m is None else round(entry.target_dist_m)
@@ -436,7 +467,8 @@ def _activity_entry(report: ActivityReport) -> dict[str, Any]:
             entry["laps_omitted"] = len(report.laps)
     if report.planned is not None:
         entry["planned"] = {
-            "name": report.planned.name,
+            "name": external_text(report.planned.name),
+            "description": external_text(report.planned.description),
             "category": report.planned.category,
             "target_time_s": report.planned.target_time_s,
             "target_dist_m": (

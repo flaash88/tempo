@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+from collections.abc import Sequence
 
 from fastapi import APIRouter, HTTPException, Request, status
 
@@ -87,6 +88,7 @@ def _run(
     task: str,
     activity_id: str | None = None,
     question: str | None = None,
+    history: Sequence[tuple[str, str]] = (),
     refresh: bool = False,
 ) -> AiAnswerResponse:
     """Every endpoint's body, including the failure modes.
@@ -103,6 +105,7 @@ def _run(
             client_factory=_client_factory(request),
             activity_id=activity_id,
             question=question,
+            history=history,
             refresh=refresh,
         )
     except BudgetExceeded as exc:
@@ -224,9 +227,16 @@ def ai_chat(
 ) -> AiAnswerResponse:
     """One question against the same document the other endpoints see.
 
-    There is no conversation history. Each question is answered from the
-    numbers alone, which is what keeps the context window bounded and what
-    keeps an earlier answer from becoming an input to the next one.
+    The client sends the earlier turns; the server decides how many of them
+    survive. Each is truncated to the configured length, at most the
+    configured number of turns is kept, and the whole history is then cut
+    to a fixed byte ceiling — so no client can use the conversation to get
+    more into the context window than the feature document's own limit
+    allows.
+
+    Numbers still come only from the document. An earlier answer is
+    context, never an input, which is what keeps a figure the model once
+    invented from circulating as though it were measured.
     """
     return _run(
         request,
@@ -234,6 +244,7 @@ def ai_chat(
         engine,
         task="chat",
         question=payload.question,
+        history=[(turn.role, turn.text) for turn in payload.history],
         refresh=refresh,
     )
 
