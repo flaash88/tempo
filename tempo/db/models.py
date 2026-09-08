@@ -158,6 +158,10 @@ class WellnessDay(Base):
     sleep_score: Mapped[int | None] = mapped_column(Integer)
     vo2max: Mapped[float | None] = mapped_column(Float)
     weight_kg: Mapped[float | None] = mapped_column(Float)
+    # Only the optional Garmin connector supplies these two; intervals.icu
+    # does not carry them. Both stay None when that connector is off.
+    body_battery: Mapped[int | None] = mapped_column(Integer)
+    training_readiness: Mapped[int | None] = mapped_column(Integer)
     source: Mapped[str] = mapped_column(
         String(16), nullable=False, default=DataSource.INTERVALS
     )
@@ -246,6 +250,27 @@ class AiCall(Base):
     cost_eur: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
 
     __table_args__ = (Index("ix_ai_call_ts", "ts"),)
+
+
+class SyncState(Base):
+    """The incremental sync watermark, one row per source.
+
+    Kept apart from ``sync_log``, which is a pure audit trail: this table is
+    the only thing the next run reads to decide where to resume. Activities
+    and wellness carry their own marks because either can fail on its own,
+    and a mark is only moved forward once its part has been processed **and
+    committed** — a half-imported window must be fetched again, not skipped.
+    """
+
+    __tablename__ = "sync_state"
+
+    source: Mapped[str] = mapped_column(String(16), primary_key=True)
+    # Naive local time, matching activity.start_local.
+    last_activity_start: Mapped[dt.datetime | None] = mapped_column(DateTime)
+    last_wellness_date: Mapped[dt.date | None] = mapped_column(Date)
+    last_success_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    # Opaque continuation token for sources that hand one out.
+    cursor: Mapped[str | None] = mapped_column(Text)
 
 
 class SyncLog(Base):

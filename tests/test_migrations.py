@@ -7,7 +7,7 @@ from alembic.migration import MigrationContext
 from sqlalchemy import Engine, inspect
 
 from tempo.db.base import Base
-from tempo.db.migrate import current_revision
+from tempo.db.migrate import current_revision, head_revision
 
 EXPECTED_TABLES = {
     "activity",
@@ -19,6 +19,7 @@ EXPECTED_TABLES = {
     "athlete_settings",
     "ai_call",
     "sync_log",
+    "sync_state",
 }
 
 
@@ -28,8 +29,8 @@ def test_upgrade_creates_every_table(engine: Engine) -> None:
     assert tables >= EXPECTED_TABLES
 
 
-def test_upgrade_records_a_revision(engine: Engine) -> None:
-    assert current_revision(engine) == "0001"
+def test_upgrade_records_the_head_revision(engine: Engine) -> None:
+    assert current_revision(engine) == head_revision()
 
 
 def test_unmigrated_database_reports_no_revision(unmigrated_engine: Engine) -> None:
