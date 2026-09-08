@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(uv:*)",
+      "Bash(uv run:*)",
+      "Bash(uv sync:*)",
+      "Bash(uv lock:*)",
+      "Bash(uv add:*)",
+      "Bash(pytest:*)",
+      "Bash(uv run pytest:*)",
+      "Bash(ruff:*)",
+      "Bash(uv run ruff:*)",
+      "Bash(mypy:*)",
+      "Bash(uv run mypy:*)",
+      "Bash(alembic:*)",
+      "Bash(uv run alembic:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(git switch:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(docker compose:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(rm -rf:*)",
+      "Read(./data/**)",
+      "Write(./data/**)",
+      "Edit(./data/**)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Write(./.env)"
+    ]
+  }
+}
