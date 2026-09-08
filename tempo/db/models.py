@@ -37,6 +37,9 @@ class DataSource(StrEnum):
     FIT = "fit"
     GARMIN = "garmin"
     MANUAL = "manual"
+    # Generated here rather than mirrored from somewhere: a session Tempo
+    # proposed. The only kind that may be written back to the calendar.
+    TEMPO = "tempo"
 
 
 class SyncStatus(StrEnum):
@@ -47,6 +50,23 @@ class SyncStatus(StrEnum):
     PARTIAL = "partial"
     FAILED = "failed"
     DISABLED = "disabled"
+
+
+class WorkoutSyncStatus(StrEnum):
+    """How far a planned session has got towards the watch.
+
+    The four the design names, plus ``OUTDATED``: the mock-up has a state
+    for a session that is on the watch but has been changed since
+    ("Struktur geändert — Uhr hat noch die alte Version"), and without it
+    that case would have to pretend to be either "on the watch" or "not
+    transferred", both of which are wrong.
+    """
+
+    NOT_SENT = "not_sent"
+    SENDING = "sending"
+    ON_WATCH = "on_watch"
+    OUTDATED = "outdated"
+    FAILED = "failed"
 
 
 class ZoneModel(StrEnum):
@@ -318,8 +338,12 @@ class PlannedWorkout(Base):
 
     Mirrors what ``GET /athlete/0/events`` returns, including entries whose
     ``category`` is not a workout at all — that is what the column is for.
-    Carries no sync status: pushing sessions back to the watch is phase 6,
-    and its bookkeeping belongs to that phase.
+
+    A row Tempo generated itself carries ``source = "tempo"`` and the
+    write-back bookkeeping: whether the athlete has confirmed it, how far
+    it has got towards the watch, and which event it became at the source.
+    A row the source owns keeps that bookkeeping empty and is never pushed
+    anywhere — it is already where it came from.
     """
 
     __tablename__ = "planned_workout"
@@ -345,6 +369,22 @@ class PlannedWorkout(Base):
     source: Mapped[str] = mapped_column(
         String(16), nullable=False, default=DataSource.INTERVALS
     )
+
+    # --- write-back bookkeeping, phase 6 -------------------------------
+    # Nothing leaves for the calendar until the athlete has confirmed it,
+    # and a session that changes afterwards loses its confirmation: what
+    # was agreed to is a particular session, not a slot in the week.
+    confirmed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    sync_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=WorkoutSyncStatus.NOT_SENT
+    )
+    synced_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    # The event this became at the source, so a change updates it instead
+    # of creating a second one next to it.
+    remote_event_id: Mapped[str | None] = mapped_column(String(64))
+    # Why the last transfer failed, for the interface to show. Never a
+    # credential — see tempo.ingest for the redaction the client applies.
+    sync_error: Mapped[str | None] = mapped_column(Text)
 
     __table_args__ = (
         UniqueConstraint("external_id", name="uq_planned_workout_external_id"),
