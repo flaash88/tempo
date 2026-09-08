@@ -96,6 +96,7 @@ sudo chown -R 1000:1000 data
 
 | Variable | Bedeutung |
 |---|---|
+| `TEMPO_DATA_DIR` | Datenbank und FIT-Dateien, Default `data` — im Container das Volume |
 | `INTERVALS_API_KEY` | API-Key aus intervals.icu, Einstellungen → Developer |
 | `INTERVALS_ATHLETE_ID` | `0` als Selbstreferenz auf den eigenen Account |
 | `ANTHROPIC_API_KEY` | Key aus der Anthropic Console |
@@ -104,9 +105,18 @@ sudo chown -R 1000:1000 data
 | `TEMPO_MONTHLY_BUDGET_EUR` | Monatsbudget, harter Stopp bei Erreichen, `0` schaltet ab |
 | `TEMPO_CHAT_MAX_TURNS` | Mitgeschickte Runden im Chat, Default `6`, Obergrenze `12` |
 | `TEMPO_CHAT_MAX_MESSAGE_CHARS` | Zeichen je Nachricht, Default `1000`, Obergrenze `2000` |
+| `TEMPO_READINESS_WEIGHT_HRV` | Gewicht der HFV in der Bereitschaft, Default `0.40` |
+| `TEMPO_READINESS_WEIGHT_RESTING_HR` | Gewicht des Ruhepulses, Default `0.20` |
+| `TEMPO_READINESS_WEIGHT_SLEEP` | Gewicht des Schlafs, Default `0.20` |
+| `TEMPO_READINESS_WEIGHT_TSB` | Gewicht der Form, Default `0.20` |
 | `TEMPO_PASSWORD_HASH` | Passwort-Hash für die Anmeldung, siehe unten |
 | `GARMIN_DIRECT_ENABLED` | Optionaler Garmin-Direktzugriff, Default `false` |
 | `GARMIN_EMAIL`, `GARMIN_PASSWORD` | Nur nötig, wenn der Garmin-Zugriff an ist |
+
+Die vier Bereitschaftsgewichte sind eine Entscheidung, keine Herleitung;
+nur ihr Verhältnis zählt, und wer eines setzt, behält für die anderen drei
+den Default. Die Begründung steht in
+[`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 `TEMPO_PASSWORD_HASH` wird nicht von Hand geschrieben, sondern mit
 `tempo hash-password` erzeugt. Der Befehl fragt das Passwort zweimal ab,

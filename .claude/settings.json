@@ -32,7 +32,6 @@
       "Write(./data/**)",
       "Edit(./data/**)",
       "Read(./.env)",
-      "Read(./.env.*)",
       "Write(./.env)"
     ]
   }
