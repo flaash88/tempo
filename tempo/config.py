@@ -16,6 +16,8 @@ from typing import Final
 
 from pydantic import BaseModel, Field, SecretStr
 
+from tempo.metrics.thresholds import DEFAULT_READINESS_WEIGHTS, ReadinessWeights
+
 TRUE_VALUES: Final = frozenset({"1", "true", "yes", "on"})
 
 
@@ -38,6 +40,21 @@ def _env_float(name: str, default: float) -> float:
         return float(raw)
     except ValueError as exc:
         raise ValueError(f"{name} must be a number, got {raw!r}") from exc
+
+
+def _env_readiness_weights() -> ReadinessWeights:
+    """Readiness weights from the environment, falling back per input.
+
+    Each weight is independent, so setting one does not force the other
+    three to be spelled out as well.
+    """
+    default = DEFAULT_READINESS_WEIGHTS
+    return ReadinessWeights(
+        hrv=_env_float("TEMPO_READINESS_WEIGHT_HRV", default.hrv),
+        resting_hr=_env_float("TEMPO_READINESS_WEIGHT_RESTING_HR", default.resting_hr),
+        sleep=_env_float("TEMPO_READINESS_WEIGHT_SLEEP", default.sleep),
+        tsb=_env_float("TEMPO_READINESS_WEIGHT_TSB", default.tsb),
+    )
 
 
 class Settings(BaseModel):
@@ -65,6 +82,11 @@ class Settings(BaseModel):
 
     # Single-user authentication
     password_hash: SecretStr = Field(default=SecretStr(""))
+
+    # How much each input counts towards readiness. A choice rather than a
+    # derivation, so it is configuration; the documented default is
+    # DEFAULT_READINESS_WEIGHTS and only the ratios matter.
+    readiness_weights: ReadinessWeights = Field(default=DEFAULT_READINESS_WEIGHTS)
 
     # Optional Garmin direct connector, off unless explicitly enabled.
     garmin_direct_enabled: bool = Field(default=False)
@@ -123,6 +145,7 @@ def load_settings() -> Settings:
         ),
         monthly_budget_eur=_env_float("TEMPO_MONTHLY_BUDGET_EUR", 10.0),
         password_hash=SecretStr(_env_str("TEMPO_PASSWORD_HASH")),
+        readiness_weights=_env_readiness_weights(),
         garmin_direct_enabled=_env_bool("GARMIN_DIRECT_ENABLED", False),
         garmin_email=_env_str("GARMIN_EMAIL"),
         garmin_password=SecretStr(_env_str("GARMIN_PASSWORD")),

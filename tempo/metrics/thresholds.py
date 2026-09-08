@@ -161,13 +161,52 @@ SECONDS_PER_HOUR: Final[int] = 3600
 
 # --- Readiness ---------------------------------------------------------
 
-# Weights of the four inputs. They sum to one; when an input is missing,
-# the weights of the ones that are present are renormalised rather than the
-# score being dragged down by a component nobody measured.
-READINESS_WEIGHT_HRV: Final[float] = 0.40
-READINESS_WEIGHT_RESTING_HR: Final[float] = 0.20
-READINESS_WEIGHT_SLEEP: Final[float] = 0.20
-READINESS_WEIGHT_TSB: Final[float] = 0.20
+
+@dataclass(frozen=True, slots=True)
+class ReadinessWeights:
+    """How much each input counts towards readiness.
+
+    Configurable rather than fixed, because these are a choice and not a
+    derivation, and the only way to find out whether they are the right
+    choice for one athlete is to change them and compare against how that
+    athlete actually feels. The documented default is
+    :data:`DEFAULT_READINESS_WEIGHTS`.
+
+    Only the ratios matter: the weights of the inputs that are present are
+    renormalised, so a set summing to anything positive behaves the same as
+    the same set scaled to one.
+    """
+
+    hrv: float
+    resting_hr: float
+    sleep: float
+    tsb: float
+
+    def __post_init__(self) -> None:
+        values = (self.hrv, self.resting_hr, self.sleep, self.tsb)
+        if any(value < 0 for value in values):
+            raise ValueError("readiness weights must not be negative")
+        if sum(values) <= 0:
+            raise ValueError("at least one readiness weight must be positive")
+
+    def as_dict(self) -> dict[str, float]:
+        return {
+            "hrv": self.hrv,
+            "resting_hr": self.resting_hr,
+            "sleep": self.sleep,
+            "tsb": self.tsb,
+        }
+
+
+# The documented default. HRV carries the most because it is the earliest
+# signal of an incomplete recovery; resting heart rate, sleep and form
+# share the rest equally.
+DEFAULT_READINESS_WEIGHTS: Final[ReadinessWeights] = ReadinessWeights(
+    hrv=0.40,
+    resting_hr=0.20,
+    sleep=0.20,
+    tsb=0.20,
+)
 
 # Below this many inputs the number would say more about what is missing
 # than about the athlete, so no value is delivered.
@@ -177,8 +216,9 @@ READINESS_MIN_COMPONENTS: Final[int] = 2
 # end of the scale in either direction.
 READINESS_DEVIATION_CLAMP_SD: Final[float] = 2.0
 
-# Sleep scores linearly up to this duration and no further.
-READINESS_SLEEP_TARGET_S: Final[int] = 8 * 3600
+# Sleep scores linearly up to this duration and no further. The default;
+# the athlete's own target lives in athlete_settings.sleep_target_s.
+DEFAULT_SLEEP_TARGET_S: Final[int] = 8 * 3600
 
 # The training stress balance range mapped onto 0..100.
 READINESS_TSB_RANGE: Final[tuple[float, float]] = (-30.0, 15.0)
@@ -206,8 +246,18 @@ DECOUPLING_MIN_DURATION_S: Final[int] = 1800
 GAP_MAX_GRADE: Final[float] = 0.30
 
 
-def as_dict() -> dict[str, Any]:
-    """Serialisable view of every threshold, for ``GET /api/thresholds``."""
+def as_dict(
+    *,
+    readiness_weights: ReadinessWeights | None = None,
+    sleep_target_s: int | None = None,
+) -> dict[str, Any]:
+    """Serialisable view of every threshold, for ``GET /api/thresholds``.
+
+    The configurable values are passed in so the answer reports what is
+    actually in force, alongside the documented default it was compared
+    against. The frontend then needs no number of its own, not even a
+    fallback.
+    """
     return {
         "minimum_history": {
             key: {
@@ -238,13 +288,14 @@ def as_dict() -> dict[str, Any]:
             "friel_pace_lower_bounds": list(FRIEL_PACE_ZONE_LOWER_BOUNDS),
         },
         "readiness": {
-            "weight_hrv": READINESS_WEIGHT_HRV,
-            "weight_resting_hr": READINESS_WEIGHT_RESTING_HR,
-            "weight_sleep": READINESS_WEIGHT_SLEEP,
-            "weight_tsb": READINESS_WEIGHT_TSB,
+            "weights": (readiness_weights or DEFAULT_READINESS_WEIGHTS).as_dict(),
+            "weights_default": DEFAULT_READINESS_WEIGHTS.as_dict(),
             "min_components": READINESS_MIN_COMPONENTS,
             "deviation_clamp_sd": READINESS_DEVIATION_CLAMP_SD,
-            "sleep_target_s": READINESS_SLEEP_TARGET_S,
+            "sleep_target_s": (
+                DEFAULT_SLEEP_TARGET_S if sleep_target_s is None else sleep_target_s
+            ),
+            "sleep_target_default_s": DEFAULT_SLEEP_TARGET_S,
             "tsb_range": list(READINESS_TSB_RANGE),
         },
         "performance": {

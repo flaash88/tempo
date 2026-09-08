@@ -26,11 +26,14 @@ from tempo.db.models import (
 from tempo.db.session import session_factory
 from tempo.metrics.thresholds import (
     BASELINE_RESET_GAP_DAYS,
+    DEFAULT_READINESS_WEIGHTS,
+    DEFAULT_SLEEP_TARGET_S,
     MIN_DAYS_FORM,
     MIN_DAYS_HRV_BASELINE,
     MIN_NIGHTS_READINESS,
     MIN_PERFORMANCES_CRITICAL_SPEED,
     STALE_AFTER_DAYS,
+    ReadinessWeights,
 )
 from tempo.recompute import recompute_all
 from tempo.snapshot import build_snapshot
@@ -654,3 +657,130 @@ def test_the_hrv_source_field_is_carried_into_the_snapshot(
     assert snapshot.hrv_source_field == "hrv"
     assert snapshot.hrv.value is not None
     assert snapshot.hrv.value.source_field == "hrv"
+
+
+# --- configurable weights and the athlete's own sleep target ------------
+
+
+def test_the_configured_weights_reach_the_score(
+    engine: Engine, open_session: Callable[[], Session]
+) -> None:
+    with open_session() as session:
+        add_settings(session)
+        add_wellness_block(
+            session,
+            TODAY - dt.timedelta(days=MIN_NIGHTS_READINESS - 1),
+            MIN_NIGHTS_READINESS,
+        )
+        session.commit()
+
+    recompute_all(engine, today=TODAY)
+    default = build_snapshot(engine, as_of=TODAY)
+    sleep_heavy = build_snapshot(
+        engine,
+        as_of=TODAY,
+        weights=ReadinessWeights(hrv=0.05, resting_hr=0.05, sleep=0.85, tsb=0.05),
+    )
+
+    assert default.readiness.value is not None
+    assert sleep_heavy.readiness.value is not None
+    assert default.readiness.value != sleep_heavy.readiness.value
+    assert default.readiness_weights == DEFAULT_READINESS_WEIGHTS
+    assert sleep_heavy.readiness_weights.sleep == pytest.approx(0.85)
+
+
+def test_the_athletes_own_sleep_target_is_used(
+    engine: Engine, open_session: Callable[[], Session]
+) -> None:
+    """Seven hours is a full night for someone who targets seven."""
+    seven_hours = 7 * 3600
+
+    with open_session() as session:
+        add_settings(session)
+        add_wellness_block(
+            session,
+            TODAY - dt.timedelta(days=MIN_NIGHTS_READINESS - 1),
+            MIN_NIGHTS_READINESS,
+            sleep_secs=seven_hours,
+        )
+        session.commit()
+
+    against_default = build_snapshot(engine, as_of=TODAY)
+
+    with open_session() as session:
+        athlete = session.get(AthleteSettings, 1)
+        assert athlete is not None
+        athlete.sleep_target_s = seven_hours
+        session.commit()
+
+    against_own = build_snapshot(engine, as_of=TODAY)
+
+    assert against_default.sleep_target_s == DEFAULT_SLEEP_TARGET_S
+    assert against_own.sleep_target_s == seven_hours
+    assert against_default.readiness_components.sleep == pytest.approx(87.5)
+    assert against_own.readiness_components.sleep == pytest.approx(100.0)
+
+
+def test_the_form_term_contributes_nothing_during_the_build_up(
+    engine: Engine, open_session: Callable[[], Session]
+) -> None:
+    """Readiness rests on HRV, resting heart rate and sleep for six weeks.
+
+    The form term needs forty-two days of tracked history, so for the whole
+    of the build-up its weight is renormalised away. Worth a test rather
+    than a note: it means the weight given to form only starts mattering
+    once the athlete has been wearing the watch for six weeks.
+    """
+    with open_session() as session:
+        add_settings(session)
+        add_wellness_block(
+            session,
+            TODAY - dt.timedelta(days=MIN_NIGHTS_READINESS - 1),
+            MIN_NIGHTS_READINESS,
+        )
+        session.commit()
+
+    recompute_all(engine, today=TODAY)
+
+    form_heavy = build_snapshot(
+        engine,
+        as_of=TODAY,
+        weights=ReadinessWeights(hrv=0.1, resting_hr=0.1, sleep=0.1, tsb=0.7),
+    )
+    form_ignored = build_snapshot(
+        engine,
+        as_of=TODAY,
+        weights=ReadinessWeights(hrv=0.1, resting_hr=0.1, sleep=0.1, tsb=0.0),
+    )
+
+    assert form_heavy.readiness_components.tsb is None
+    assert form_heavy.readiness.value == form_ignored.readiness.value
+
+
+def test_the_subjective_fields_are_stored_and_read_by_nothing_yet(
+    engine: Engine, open_session: Callable[[], Session]
+) -> None:
+    """On the record from now on, so the weights can be calibrated later."""
+    with open_session() as session:
+        add_settings(session)
+        add_wellness_block(
+            session,
+            TODAY - dt.timedelta(days=MIN_NIGHTS_READINESS - 1),
+            MIN_NIGHTS_READINESS,
+        )
+        day = session.get(WellnessDay, TODAY)
+        assert day is not None
+        day.fatigue = 2
+        day.soreness = 3
+        day.mood = 1
+        session.commit()
+
+    without = build_snapshot(engine, as_of=TODAY)
+
+    with open_session() as session:
+        stored = session.get(WellnessDay, TODAY)
+        assert stored is not None
+        assert (stored.fatigue, stored.soreness, stored.mood) == (2, 3, 1)
+
+    # Nothing in the score depends on them yet, by design.
+    assert without.readiness_components.present == 3

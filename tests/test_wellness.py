@@ -13,13 +13,15 @@ import math
 import pytest
 
 from tempo.metrics.thresholds import (
+    DEFAULT_READINESS_WEIGHTS,
+    DEFAULT_SLEEP_TARGET_S,
     HRV_ROLLING_MEAN_DAYS,
     MIN_DAYS_HRV_BASELINE,
     MIN_NIGHTS_READINESS,
     READINESS_DEVIATION_CLAMP_SD,
     READINESS_MIN_COMPONENTS,
-    READINESS_SLEEP_TARGET_S,
     READINESS_TSB_RANGE,
+    ReadinessWeights,
 )
 from tempo.metrics.wellness import (
     Baseline,
@@ -314,18 +316,52 @@ def test_sleep_scores_linearly_up_to_the_target() -> None:
     half = readiness_components(
         hrv_deviation_sd=None,
         resting_hr_deviation_sd=None,
-        sleep_secs=READINESS_SLEEP_TARGET_S // 2,
+        sleep_secs=DEFAULT_SLEEP_TARGET_S // 2,
         tsb=None,
     )
     full = readiness_components(
         hrv_deviation_sd=None,
         resting_hr_deviation_sd=None,
-        sleep_secs=READINESS_SLEEP_TARGET_S * 2,
+        sleep_secs=DEFAULT_SLEEP_TARGET_S * 2,
         tsb=None,
     )
 
     assert half.sleep == pytest.approx(50.0)
     assert full.sleep == pytest.approx(100.0)
+
+
+def test_the_sleep_target_can_be_the_athletes_own() -> None:
+    """Seven hours of sleep is a full night for someone who targets seven."""
+    seven_hours = 7 * 3600
+
+    scored = readiness_components(
+        hrv_deviation_sd=None,
+        resting_hr_deviation_sd=None,
+        sleep_secs=seven_hours,
+        tsb=None,
+        sleep_target_s=seven_hours,
+    )
+    against_default = readiness_components(
+        hrv_deviation_sd=None,
+        resting_hr_deviation_sd=None,
+        sleep_secs=seven_hours,
+        tsb=None,
+    )
+
+    assert scored.sleep == pytest.approx(100.0)
+    assert against_default.sleep == pytest.approx(87.5)
+
+
+def test_a_target_of_nothing_leaves_the_sleep_term_absent() -> None:
+    scored = readiness_components(
+        hrv_deviation_sd=None,
+        resting_hr_deviation_sd=None,
+        sleep_secs=25_200,
+        tsb=None,
+        sleep_target_s=0,
+    )
+
+    assert scored.sleep is None
 
 
 def test_form_maps_onto_the_configured_range() -> None:
@@ -373,6 +409,46 @@ def test_the_weights_of_the_present_components_are_renormalised() -> None:
 
     # 0.40 and 0.20 renormalise to 2/3 and 1/3.
     assert readiness_score(components) == round(80.0 * 2 / 3 + 60.0 * 1 / 3)
+
+
+def test_the_default_weights_are_the_documented_ones() -> None:
+    assert DEFAULT_READINESS_WEIGHTS.hrv == pytest.approx(0.40)
+    assert DEFAULT_READINESS_WEIGHTS.resting_hr == pytest.approx(0.20)
+    assert DEFAULT_READINESS_WEIGHTS.sleep == pytest.approx(0.20)
+    assert DEFAULT_READINESS_WEIGHTS.tsb == pytest.approx(0.20)
+    assert sum(DEFAULT_READINESS_WEIGHTS.as_dict().values()) == pytest.approx(1.0)
+
+
+def test_configured_weights_change_the_score() -> None:
+    components = ReadinessComponents(hrv=100.0, sleep=0.0)
+    sleep_heavy = ReadinessWeights(hrv=0.1, resting_hr=0.2, sleep=0.6, tsb=0.1)
+
+    assert readiness_score(components, DEFAULT_READINESS_WEIGHTS) == round(
+        100.0 * 0.4 / 0.6
+    )
+    assert readiness_score(components, sleep_heavy) == round(100.0 * 0.1 / 0.7)
+
+
+def test_only_the_ratios_of_the_weights_matter() -> None:
+    """A set scaled by ten behaves exactly as the original."""
+    components = ReadinessComponents(hrv=80.0, sleep=40.0, tsb=60.0)
+    scaled = ReadinessWeights(hrv=4.0, resting_hr=2.0, sleep=2.0, tsb=2.0)
+
+    assert readiness_score(components, scaled) == readiness_score(
+        components, DEFAULT_READINESS_WEIGHTS
+    )
+
+
+@pytest.mark.parametrize(
+    "weights",
+    [
+        {"hrv": -0.1, "resting_hr": 0.2, "sleep": 0.2, "tsb": 0.2},
+        {"hrv": 0.0, "resting_hr": 0.0, "sleep": 0.0, "tsb": 0.0},
+    ],
+)
+def test_unusable_weights_are_refused(weights: dict[str, float]) -> None:
+    with pytest.raises(ValueError):
+        ReadinessWeights(**weights)
 
 
 def test_one_component_alone_is_not_a_readiness_score() -> None:
@@ -425,7 +501,7 @@ def test_readiness_works_before_the_hrv_baseline_exists() -> None:
     components = readiness_components(
         hrv_deviation_sd=None,
         resting_hr_deviation_sd=0.5,
-        sleep_secs=READINESS_SLEEP_TARGET_S,
+        sleep_secs=DEFAULT_SLEEP_TARGET_S,
         tsb=0.0,
     )
 

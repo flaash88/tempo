@@ -181,6 +181,9 @@ def upsert_wellness(
         day.sleep_score = entry.sleep_score
         day.vo2max = entry.vo2max
         day.weight_kg = entry.weight_kg
+        day.fatigue = entry.fatigue
+        day.soreness = entry.soreness
+        day.mood = entry.mood
         day.source = source
         stored += 1
     return stored

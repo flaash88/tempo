@@ -84,6 +84,12 @@ class WellnessValues:
     sleep_score: int | None = None
     vo2max: float | None = None
     weight_kg: float | None = None
+    # How the day felt, on the source's own scale. Stored, not interpreted:
+    # what the numbers mean has not been confirmed against a live account,
+    # and nothing reads them yet.
+    fatigue: int | None = None
+    soreness: int | None = None
+    mood: int | None = None
 
     @property
     def is_empty(self) -> bool:
@@ -97,6 +103,9 @@ class WellnessValues:
                 self.sleep_score,
                 self.vo2max,
                 self.weight_kg,
+                self.fatigue,
+                self.soreness,
+                self.mood,
             )
         )
 
@@ -239,6 +248,9 @@ def to_wellness_values(payload: dict[str, Any]) -> WellnessValues:
         sleep_score=_as_int(payload.get("sleepScore")),
         vo2max=_as_float(payload.get("vo2max")),
         weight_kg=_as_float(payload.get("weight")),
+        fatigue=_as_int(payload.get("fatigue")),
+        soreness=_as_int(payload.get("soreness")),
+        mood=_as_int(payload.get("mood")),
     )
 
 

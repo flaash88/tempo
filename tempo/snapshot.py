@@ -20,7 +20,13 @@ from typing import Final
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
-from tempo.db.models import Activity, ActivityStream, FitnessDay, WellnessDay
+from tempo.db.models import (
+    Activity,
+    ActivityStream,
+    AthleteSettings,
+    FitnessDay,
+    WellnessDay,
+)
 from tempo.db.session import session_scope
 from tempo.ingest.sports import RUN
 from tempo.metrics.confidence import (
@@ -39,8 +45,11 @@ from tempo.metrics.performance import (
 from tempo.metrics.thresholds import (
     CRITICAL_SPEED_MAX_DURATION_S,
     CRITICAL_SPEED_MIN_DURATION_S,
+    DEFAULT_READINESS_WEIGHTS,
+    DEFAULT_SLEEP_TARGET_S,
     MIN_DAYS_FORM,
     MIN_PERFORMANCES_CRITICAL_SPEED,
+    ReadinessWeights,
 )
 from tempo.metrics.wellness import (
     Baseline,
@@ -82,6 +91,10 @@ class Snapshot:
     # Which source field the HRV readings came from, carried through rather
     # than interpreted. None when there are no readings.
     hrv_source_field: str | None = None
+    # What was in force while this was assembled, so a caller can report the
+    # answer and the settings behind it together.
+    readiness_weights: ReadinessWeights = DEFAULT_READINESS_WEIGHTS
+    sleep_target_s: int = DEFAULT_SLEEP_TARGET_S
 
     @property
     def any_value(self) -> bool:
@@ -205,8 +218,17 @@ def _best_efforts_across_activities(
     return list(best.values()), newest
 
 
-def build_snapshot(engine: Engine, *, as_of: dt.date | None = None) -> Snapshot:
-    """Assemble the current state of every headline metric."""
+def build_snapshot(
+    engine: Engine,
+    *,
+    as_of: dt.date | None = None,
+    weights: ReadinessWeights = DEFAULT_READINESS_WEIGHTS,
+) -> Snapshot:
+    """Assemble the current state of every headline metric.
+
+    ``weights`` comes from the configuration; the sleep target comes from
+    the athlete's own settings, falling back to the documented default.
+    """
     as_of = as_of or dt.datetime.now(tz=dt.UTC).date()
 
     with session_scope(engine) as session:
@@ -214,6 +236,12 @@ def build_snapshot(engine: Engine, *, as_of: dt.date | None = None) -> Snapshot:
         activity_days = _activity_days(session)
         fitness_row = session.get(FitnessDay, as_of)
         efforts, efforts_newest = _best_efforts_across_activities(session)
+        athlete = session.get(AthleteSettings, 1)
+        sleep_target_s = (
+            athlete.sleep_target_s
+            if athlete is not None and athlete.sleep_target_s
+            else DEFAULT_SLEEP_TARGET_S
+        )
 
     wellness_days = [row.date for row in wellness]
     nights = tracked_window(wellness_days, [], as_of=as_of)
@@ -255,12 +283,14 @@ def build_snapshot(engine: Engine, *, as_of: dt.date | None = None) -> Snapshot:
         ),
         sleep_secs=latest.sleep_secs if inside_window and latest else None,
         tsb=form.value.tsb if form.value is not None else None,
+        sleep_target_s=sleep_target_s,
     )
     readiness_result = readiness(
         nights=nights,
         components=components,
         as_of=as_of,
         newest_data_point=newest_of(wellness_days),
+        weights=weights,
     )
 
     cs_value = critical_speed(efforts)
@@ -297,6 +327,8 @@ def build_snapshot(engine: Engine, *, as_of: dt.date | None = None) -> Snapshot:
             if hrv_result.value is not None
             else (hrv_readings[-1].source_field if hrv_readings else None)
         ),
+        readiness_weights=weights,
+        sleep_target_s=sleep_target_s,
     )
     log.debug(
         "snapshot built",

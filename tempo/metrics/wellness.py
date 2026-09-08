@@ -30,6 +30,8 @@ from tempo.metrics.confidence import (
     newest_of,
 )
 from tempo.metrics.thresholds import (
+    DEFAULT_READINESS_WEIGHTS,
+    DEFAULT_SLEEP_TARGET_S,
     HRV_BAND_SD_MULTIPLIER,
     HRV_REFERENCE_WINDOW_DAYS,
     HRV_ROLLING_MEAN_DAYS,
@@ -37,12 +39,8 @@ from tempo.metrics.thresholds import (
     MIN_NIGHTS_READINESS,
     READINESS_DEVIATION_CLAMP_SD,
     READINESS_MIN_COMPONENTS,
-    READINESS_SLEEP_TARGET_S,
     READINESS_TSB_RANGE,
-    READINESS_WEIGHT_HRV,
-    READINESS_WEIGHT_RESTING_HR,
-    READINESS_WEIGHT_SLEEP,
-    READINESS_WEIGHT_TSB,
+    ReadinessWeights,
 )
 
 
@@ -267,10 +265,10 @@ def _clamped_deviation_score(
     return 50.0 + 50.0 * fraction
 
 
-def _sleep_score(sleep_secs: int | None) -> float | None:
-    if sleep_secs is None or sleep_secs < 0:
+def _sleep_score(sleep_secs: int | None, target_s: int) -> float | None:
+    if sleep_secs is None or sleep_secs < 0 or target_s <= 0:
         return None
-    return 100.0 * min(1.0, sleep_secs / READINESS_SLEEP_TARGET_S)
+    return 100.0 * min(1.0, sleep_secs / target_s)
 
 
 def _tsb_score(tsb: float | None) -> float | None:
@@ -288,20 +286,28 @@ def readiness_components(
     resting_hr_deviation_sd: float | None,
     sleep_secs: int | None,
     tsb: float | None,
+    sleep_target_s: int = DEFAULT_SLEEP_TARGET_S,
 ) -> ReadinessComponents:
-    """Score each input on 0..100, leaving absent ones absent."""
+    """Score each input on 0..100, leaving absent ones absent.
+
+    ``sleep_target_s`` is the athlete's own target where one is configured;
+    eight hours otherwise.
+    """
     return ReadinessComponents(
         hrv=_clamped_deviation_score(hrv_deviation_sd, higher_is_better=True),
         # A resting heart rate above baseline is the unwelcome direction.
         resting_hr=_clamped_deviation_score(
             resting_hr_deviation_sd, higher_is_better=False
         ),
-        sleep=_sleep_score(sleep_secs),
+        sleep=_sleep_score(sleep_secs, sleep_target_s),
         tsb=_tsb_score(tsb),
     )
 
 
-def readiness_score(components: ReadinessComponents) -> int | None:
+def readiness_score(
+    components: ReadinessComponents,
+    weights: ReadinessWeights = DEFAULT_READINESS_WEIGHTS,
+) -> int | None:
     """Weighted mean of the inputs that are present, 0..100.
 
     The weights of the present inputs are renormalised rather than the score
@@ -313,10 +319,10 @@ def readiness_score(components: ReadinessComponents) -> int | None:
     if components.present < READINESS_MIN_COMPONENTS:
         return None
     weighted = (
-        (components.hrv, READINESS_WEIGHT_HRV),
-        (components.resting_hr, READINESS_WEIGHT_RESTING_HR),
-        (components.sleep, READINESS_WEIGHT_SLEEP),
-        (components.tsb, READINESS_WEIGHT_TSB),
+        (components.hrv, weights.hrv),
+        (components.resting_hr, weights.resting_hr),
+        (components.sleep, weights.sleep),
+        (components.tsb, weights.tsb),
     )
     total_weight = sum(weight for value, weight in weighted if value is not None)
     if total_weight <= 0:
@@ -365,6 +371,7 @@ def readiness(
     components: ReadinessComponents,
     as_of: dt.date,
     newest_data_point: dt.date | None = None,
+    weights: ReadinessWeights = DEFAULT_READINESS_WEIGHTS,
 ) -> MetricResult[int]:
     """Readiness with its evidence.
 
@@ -374,7 +381,7 @@ def readiness(
     """
     window = current_window(nights, as_of=as_of)
     return from_window(
-        readiness_score(components),
+        readiness_score(components, weights),
         window=window,
         required=MIN_NIGHTS_READINESS,
         as_of=as_of,

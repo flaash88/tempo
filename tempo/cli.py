@@ -76,7 +76,7 @@ def cmd_recompute(args: argparse.Namespace, settings: Settings) -> int:
     engine = engine_for(settings)
     try:
         report = recompute_all(engine)
-        snapshot = build_snapshot(engine)
+        snapshot = build_snapshot(engine, weights=settings.readiness_weights)
     finally:
         engine.dispose()
 

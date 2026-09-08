@@ -171,6 +171,14 @@ class WellnessDay(Base):
     # does not carry them. Both stay None when that connector is off.
     body_battery: Mapped[int | None] = mapped_column(Integer)
     training_readiness: Mapped[int | None] = mapped_column(Integer)
+    # How the day actually felt, as the athlete entered it. Stored on the
+    # source's own scale and, for now, read by nothing: these are the only
+    # way the readiness weights can later be calibrated against real
+    # perception rather than against each other. Any evaluation has to wait
+    # until the scale has been confirmed against a live account.
+    fatigue: Mapped[int | None] = mapped_column(Integer)
+    soreness: Mapped[int | None] = mapped_column(Integer)
+    mood: Mapped[int | None] = mapped_column(Integer)
     source: Mapped[str] = mapped_column(
         String(16), nullable=False, default=DataSource.INTERVALS
     )
@@ -233,6 +241,9 @@ class AthleteSettings(Base):
     hr_rest: Mapped[int | None] = mapped_column(Integer)
     lthr: Mapped[int | None] = mapped_column(Integer)
     threshold_pace_s_per_km: Mapped[float | None] = mapped_column(Float)
+    # The athlete's own sleep target. None falls back to the documented
+    # default in tempo.metrics.thresholds.
+    sleep_target_s: Mapped[int | None] = mapped_column(Integer)
     zone_model: Mapped[str] = mapped_column(
         String(32), nullable=False, default=ZoneModel.FRIEL_RUN_LTHR
     )

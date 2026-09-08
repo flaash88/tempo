@@ -482,13 +482,47 @@ Was hier nicht steht, ist nicht entschieden.
 
 ### Bereitschaftsgewichte
 
-- **HFV 0,40 · Ruhe-HF 0,20 · Schlaf 0,20 · Form 0,20**, als benannte
-  Konstanten an einer Stelle. Die Gewichte der *vorhandenen* Eingaben
+- **HFV 0,40 · Ruhe-HF 0,20 · Schlaf 0,20 · Form 0,20 als dokumentierter
+  Default, aber konfigurierbar** über
+  `TEMPO_READINESS_WEIGHT_HRV` und die drei Geschwister. Die Gewichte sind
+  eine Wahl und keine Ableitung, und der einzige Weg herauszufinden, ob sie
+  für einen bestimmten Athleten stimmen, ist sie zu ändern und mit dem
+  Empfinden zu vergleichen. Jeder Wert lässt sich einzeln setzen, die
+  anderen drei behalten ihren Default.
+- **Nur die Verhältnisse zählen.** Die Gewichte der *vorhandenen* Eingaben
   werden renormiert, statt den Wert von etwas herunterziehen zu lassen, das
-  niemand gemessen hat. Unter zwei Eingaben gibt es keinen Wert: eine
-  einzelne Zahl würde mehr über das Fehlende sagen als über den Athleten.
-  Die Gewichte selbst sind eine Wahl, nicht eine Ableitung — sie gehören
-  ins Review.
+  niemand gemessen hat; ein mit zehn multiplizierter Satz verhält sich
+  deshalb identisch. Ein negatives Gewicht und ein Satz aus Nullen werden
+  abgelehnt.
+- **Unter zwei Eingaben gibt es keinen Wert.** Eine einzelne Zahl würde
+  mehr über das Fehlende sagen als über den Athleten.
+- **In der Aufbauphase trägt der Form-Term praktisch nichts bei.** Er
+  braucht 42 Tage getrackte Historie; solange die nicht da sind, ist er
+  nicht vorhanden und wird wegrenormiert. **Die Bereitschaft ruht in dieser
+  Zeit faktisch auf HFV, Ruhepuls und Schlaf** — das Gewicht für die Form
+  fängt erst an zu wirken, wenn die Uhr sechs Wochen lang getragen wurde.
+  Für diesen Athleten, der gerade wieder einsteigt, ist das der Zustand der
+  nächsten Wochen und nicht die Ausnahme. Ein Test hält es fest, statt es
+  nur hier zu behaupten: mit Gewicht 0,7 auf der Form kommt derselbe Wert
+  heraus wie mit Gewicht 0.
+- **Das Schlafziel steht in `athlete_settings.sleep_target_s`**, Default
+  acht Stunden. Sieben Stunden sind eine volle Nacht für jemanden, der
+  sieben anstrebt; eine feste Zahl im Code hätte das zu 87,5 Punkten
+  gemacht.
+
+### Subjektive Tagesform
+
+- **`wellness_day` bekommt `fatigue`, `soreness` und `mood`** (Migration
+  `0004`), gespeichert und von nichts gelesen. Sie werden ab jetzt
+  mitgeführt, weil sie später der einzige Weg sind, die Gewichte gegen
+  echtes Empfinden zu kalibrieren statt gegeneinander — und Kalibrierung
+  braucht Daten aus der Vergangenheit, nicht ab dem Tag, an dem eine
+  Auswertung geschrieben wird.
+- **Die Skala ist die der Quelle und ungeprüft.** intervals.icu liefert
+  diese Felder als kleine Ganzzahlen; was 1 gegenüber 4 bedeutet und in
+  welche Richtung, ist gegen keinen echten Account bestätigt. Deshalb wird
+  der Rohwert gespeichert und nichts interpretiert — dieselbe Haltung wie
+  beim HFV-Feldnamen. Eine Auswertung wartet auf die Bestätigung.
 
 ### Recompute
 
