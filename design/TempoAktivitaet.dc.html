@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/nocturne-60c16d8e-f385-46f7-82f9-f9ae2551355c/styles.css">
+  <link rel="stylesheet" href="tempo-tokens.css">
+  <script src="_ds/nocturne-60c16d8e-f385-46f7-82f9-f9ae2551355c/_ds_bundle.js"></script>
+</helmet>
+<div style="width:390px;height:844px;position:relative;overflow:hidden;border-radius:44px;background:var(--t-bg);color:var(--t-ink);font-family:var(--font-body);display:flex;flex-direction:column;-webkit-font-smoothing:antialiased">
+
+  <div style="height:var(--safe-top);flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 28px 6px;font-size:14px;font-weight:600">
+    <span style="font-variant-numeric:tabular-nums">19:41</span>
+    <span style="display:flex;align-items:center;gap:5px">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"></rect><rect x="4.5" y="5" width="3" height="6" rx="1"></rect><rect x="9" y="2.5" width="3" height="8.5" rx="1"></rect><rect x="13.5" y="0" width="3" height="11" rx="1" opacity="0.35"></rect></svg>
+      <svg width="16" height="11" viewBox="0 0 16 11" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 3.4a9.5 9.5 0 0 1 14 0"></path><path d="M3.6 6.2a6 6 0 0 1 8.8 0"></path><path d="M6.2 8.9a2.6 2.6 0 0 1 3.6 0"></path></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3.2" stroke="currentColor" opacity="0.4"></rect><rect x="2.2" y="2.2" width="14" height="7.6" rx="2" fill="currentColor"></rect><path d="M23 4.2v3.6a2 2 0 0 0 0-3.6z" fill="currentColor" opacity="0.4"></path></svg>
+    </span>
+  </div>
+
+  <div style="flex:none;display:flex;align-items:center;gap:4px;padding:2px 8px 6px">
+    <button type="button" style="width:44px;height:44px;border:0;background:transparent;color:var(--t-accent-ink);display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:var(--r-md)" style-hover="background:var(--t-accent-soft)">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5l-7 7 7 7"></path></svg>
+    </button>
+    <span style="flex:1;font-size:var(--fs-label);color:var(--t-ink-3);font-variant-numeric:tabular-nums">Sonntag, 7. September · 08:12</span>
+    <button type="button" style="width:44px;height:44px;border:0;background:transparent;color:var(--t-ink-3);display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:var(--r-md)" style-hover="background:var(--t-surface)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="12" cy="19" r="1.8"></circle></svg>
+    </button>
+  </div>
+
+  <sc-if value="{{ showBanner }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:none;margin:0 16px 8px;padding:9px 12px;border-radius:var(--r-md);display:flex;align-items:center;gap:9px;background:{{ bannerBg }};box-shadow:0 0 0 1px {{ bannerLine }}">
+      <span style="width:7px;height:7px;flex:none;border-radius:var(--r-pill);background:{{ bannerDot }}"></span>
+      <span style="flex:1;font-size:var(--fs-label);line-height:1.35;color:var(--t-ink-2)">{{ bannerText }}</span>
+      <sc-if value="{{ isError }}" hint-placeholder-val="{{ false }}">
+        <button type="button" class="btn btn-primary" style="flex:none;min-height:28px;padding:0 10px;font-size:var(--fs-label);color:var(--t-accent-ink);border-color:var(--t-accent-line)">Erneut</button>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <div data-tempo-scroll="" style="flex:1;min-height:0;overflow-y:auto;padding:0 16px 96px;display:flex;flex-direction:column;gap:12px">
+
+    <sc-if value="{{ hasData }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:12px;opacity:{{ dataOpacity }}">
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:var(--fs-micro);padding:3px 7px;border-radius:var(--r-sm);background:var(--z3-band);color:var(--z3)">Tempo</span>
+            <span style="font-size:var(--fs-body);font-weight:500">Isarauen, Süd-Loop</span>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:8px">
+            <span style="font-size:var(--fs-metric);line-height:1;font-weight:500;letter-spacing:var(--ls-num);font-variant-numeric:tabular-nums">12,4</span>
+            <span style="font-size:var(--fs-label);color:var(--t-ink-3)">km</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);overflow:hidden">
+            <div style="padding:10px 12px;display:flex;flex-direction:column;gap:2px">
+              <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Zeit</span>
+              <span style="font-size:var(--fs-metric-sm);line-height:1.1;font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:var(--ls-num)">54:31</span>
+            </div>
+            <div style="padding:10px 12px;display:flex;flex-direction:column;gap:2px;border-left:1px solid var(--t-line)">
+              <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Ø Pace</span>
+              <span style="font-size:var(--fs-metric-sm);line-height:1.1;font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:var(--ls-num)">4:24<span style="font-size:var(--fs-micro);color:var(--t-ink-3);margin-left:2px">/km</span></span>
+            </div>
+            <div style="padding:10px 12px;display:flex;flex-direction:column;gap:2px;border-left:1px solid var(--t-line)">
+              <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Ø HF</span>
+              <span style="font-size:var(--fs-metric-sm);line-height:1.1;font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:var(--ls-num)">152<span style="font-size:var(--fs-micro);color:var(--t-ink-3);margin-left:2px">bpm</span></span>
+            </div>
+          </div>
+        </div>
+
+        <div style="position:relative;height:150px;border-radius:var(--r-lg);background:var(--t-surface);box-shadow:var(--sh-1);overflow:hidden">
+          <svg width="358" height="150" viewBox="0 0 358 150" fill="none" style="display:block;opacity:.55">
+            <path d="M18 128 C 60 118, 74 92, 108 86 S 150 96, 178 74 C 210 50, 228 62, 258 48 S 306 40, 330 22" stroke="var(--t-ink-3)" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="0"></path>
+            <circle cx="18" cy="128" r="4" fill="var(--st-good)"></circle>
+            <circle cx="330" cy="22" r="4" fill="var(--st-warn)"></circle>
+          </svg>
+          <div style="position:absolute;inset:0;border-radius:var(--r-lg);border:1px dashed var(--t-line-strong)"></div>
+          <span style="position:absolute;left:12px;bottom:10px;font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Route · Kartenplatzhalter</span>
+          <span style="position:absolute;right:12px;bottom:10px;font-size:var(--fs-micro);color:var(--t-ink-3);font-variant-numeric:tabular-nums">148 hm ↑</span>
+        </div>
+
+        <div style="background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:12px 12px 10px;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between">
+            <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Pace + Herzfrequenz</span>
+            <span style="display:flex;gap:10px;font-size:var(--fs-micro);color:var(--t-ink-3)">
+              <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:2px;background:var(--t-ink)"></span>HF</span>
+              <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:2px;background:var(--t-accent-ink)"></span>Pace</span>
+            </span>
+          </div>
+          <div style="position:relative;width:100%;height:150px;touch-action:none;cursor:crosshair" onPointerDown="{{ onScrub }}" onPointerMove="{{ onScrubMove }}" onPointerUp="{{ onScrubEnd }}">
+            <svg width="100%" height="150" viewBox="0 0 330 150" preserveAspectRatio="none" style="display:block;position:absolute;inset:0">
+              <rect x="0" y="115.4" width="330" height="34.6" fill="var(--z1-band)"></rect>
+              <rect x="0" y="78.5" width="330" height="36.9" fill="var(--z2-band)"></rect>
+              <rect x="0" y="50.8" width="330" height="27.7" fill="var(--z3-band)"></rect>
+              <rect x="0" y="27.7" width="330" height="23.1" fill="var(--z4-band)"></rect>
+              <rect x="0" y="0" width="330" height="27.7" fill="var(--z5-band)"></rect>
+              <polyline points="{{ pacePoints }}" stroke="var(--t-accent-ink)" stroke-width="1.1" vector-effect="non-scaling-stroke" opacity="0.85"></polyline>
+              <polyline points="{{ hrPoints }}" stroke="var(--t-ink)" stroke-width="1.4" vector-effect="non-scaling-stroke"></polyline>
+            </svg>
+            <div style="position:absolute;left:0;top:0;bottom:0;width:1px;background:var(--t-ink);opacity:{{ scrubOpacity }};transform:translateX({{ scrubX }})"></div>
+            <span style="position:absolute;right:2px;top:2px;font-size:10.5px;color:var(--z5)">Z5</span>
+            <span style="position:absolute;right:2px;top:32px;font-size:10.5px;color:var(--z4)">Z4</span>
+            <span style="position:absolute;right:2px;top:56px;font-size:10.5px;color:var(--z3)">Z3</span>
+            <span style="position:absolute;right:2px;top:84px;font-size:10.5px;color:var(--z2)">Z2</span>
+            <span style="position:absolute;right:2px;top:120px;font-size:10.5px;color:var(--z1)">Z1</span>
+          </div>
+          <sc-if value="{{ scrubOn }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:var(--r-md);background:var(--t-surface-2);font-size:var(--fs-label);font-variant-numeric:tabular-nums">
+              <span style="color:var(--t-ink-3)">km {{ scrubKm }}</span>
+              <span style="font-weight:500">{{ scrubPace }}<span style="color:var(--t-ink-3);font-size:var(--fs-micro)"> /km</span></span>
+              <span style="font-weight:500">{{ scrubHr }}<span style="color:var(--t-ink-3);font-size:var(--fs-micro)"> bpm</span></span>
+              <span style="margin-left:auto;padding:2px 7px;border-radius:var(--r-sm);background:{{ scrubZoneBand }};color:{{ scrubZoneInk }};font-size:var(--fs-micro)">{{ scrubZone }}</span>
+            </div>
+          </sc-if>
+          <sc-if value="{{ scrubOff }}" hint-placeholder-val="{{ true }}">
+            <span style="font-size:var(--fs-micro);color:var(--t-ink-3);padding:2px 0">Antippen und ziehen für Werte am Datenpunkt</span>
+          </sc-if>
+        </div>
+
+        <div style="background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:12px 14px 13px;display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between">
+            <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Zonenverteilung</span>
+            <span style="font-size:var(--fs-micro);color:var(--t-ink-3);font-variant-numeric:tabular-nums">54:31 gesamt</span>
+          </div>
+          <div style="display:flex;height:22px;border-radius:var(--r-sm);overflow:hidden">
+            <span style="flex:6;background:var(--z1)"></span><span style="flex:24;background:var(--z2)"></span><span style="flex:12;background:var(--z3)"></span><span style="flex:9;background:var(--z4)"></span><span style="flex:3.5;background:var(--z5)"></span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;font-variant-numeric:tabular-nums">
+            <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10.5px;color:var(--z1)">Z1</span><span style="font-size:var(--fs-label);font-weight:500">6:00</span><span style="font-size:10.5px;color:var(--t-ink-3)">11 %</span></div>
+            <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10.5px;color:var(--z2)">Z2</span><span style="font-size:var(--fs-label);font-weight:500">24:00</span><span style="font-size:10.5px;color:var(--t-ink-3)">44 %</span></div>
+            <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10.5px;color:var(--z3)">Z3</span><span style="font-size:var(--fs-label);font-weight:500">12:00</span><span style="font-size:10.5px;color:var(--t-ink-3)">22 %</span></div>
+            <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10.5px;color:var(--z4)">Z4</span><span style="font-size:var(--fs-label);font-weight:500">9:01</span><span style="font-size:10.5px;color:var(--t-ink-3)">17 %</span></div>
+            <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10.5px;color:var(--z5)">Z5</span><span style="font-size:var(--fs-label);font-weight:500">3:30</span><span style="font-size:10.5px;color:var(--t-ink-3)">6 %</span></div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:10px 12px;display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">TRIMP</span>
+            <span style="font-size:var(--fs-metric-xs);font-weight:500;font-variant-numeric:tabular-nums">142</span>
+            <span style="font-size:10.5px;color:var(--t-ink-3)">Ø Woche 118</span>
+          </div>
+          <div style="background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:10px 12px;display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">hrTSS</span>
+            <span style="font-size:var(--fs-metric-xs);font-weight:500;font-variant-numeric:tabular-nums">78</span>
+            <span style="font-size:10.5px;color:var(--t-ink-3)">Plan 70</span>
+          </div>
+          <div style="background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:10px 12px;display:flex;flex-direction:column;gap:3px">
+            <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">GAP</span>
+            <sc-if value="{{ gapValue }}" hint-placeholder-val="{{ true }}">
+              <span style="font-size:var(--fs-metric-xs);font-weight:500;font-variant-numeric:tabular-nums">4:19<span style="font-size:10.5px;color:var(--t-ink-3);margin-left:2px">/km</span></span>
+              <span style="font-size:10.5px;color:var(--t-ink-3)">−5 s zur Rohpace</span>
+            </sc-if>
+            <sc-if value="{{ gapBuilding }}" hint-placeholder-val="{{ false }}">
+              <span style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--t-accent-ink)">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M4 20V9M11 20V4M18 20v-7"></path></svg>Im Aufbau
+              </span>
+              <span style="font-size:var(--fs-metric-xs);font-weight:500;font-variant-numeric:tabular-nums;color:var(--t-ink-2)">9<span style="font-size:10.5px;color:var(--t-ink-3);margin-left:2px">/ 15 Läufe</span></span>
+              <span style="display:block;height:3px;border-radius:var(--r-pill);background:var(--t-line);overflow:hidden"><span style="display:block;height:3px;width:60%;background:var(--t-accent-line)"></span></span>
+              <span style="font-size:10.5px;color:var(--t-ink-3)">Höhenmodell ab 21.09.</span>
+            </sc-if>
+          </div>
+          <div style="background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:10px 12px;display:flex;flex-direction:column;gap:3px">
+            <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Decoupling</span>
+            <span style="font-size:var(--fs-metric-xs);font-weight:500;font-variant-numeric:tabular-nums;color:var(--st-good)">4,8 %</span>
+            <sc-if value="{{ decStale }}" hint-placeholder-val="{{ false }}">
+              <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 5px;border:1px dashed var(--st-neutral);border-radius:var(--r-sm);font-size:11px;letter-spacing:.01em;color:var(--st-neutral);white-space:nowrap;align-self:flex-start">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v5l3.5 2"></path></svg>Stand 24.08.
+              </span>
+            </sc-if>
+            <sc-if value="{{ decFresh }}" hint-placeholder-val="{{ true }}">
+              <span style="font-size:10.5px;color:var(--t-ink-3)">Pa:HR · unter 5 % gut</span>
+            </sc-if>
+          </div>
+          <div style="background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:10px 12px;display:flex;flex-direction:column;gap:3px">
+            <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Efficiency Factor</span>
+            <sc-if value="{{ efValue }}" hint-placeholder-val="{{ true }}">
+              <span style="font-size:var(--fs-metric-xs);font-weight:500;font-variant-numeric:tabular-nums">1,72</span>
+              <span style="font-size:10.5px;color:var(--st-good)">+0,04 zu 30-Tage-Ø</span>
+            </sc-if>
+            <sc-if value="{{ efBuilding }}" hint-placeholder-val="{{ false }}">
+              <span style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--t-accent-ink)">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M4 20V9M11 20V4M18 20v-7"></path></svg>Im Aufbau
+              </span>
+              <span style="font-size:var(--fs-metric-xs);font-weight:500;font-variant-numeric:tabular-nums;color:var(--t-ink-2)">34<span style="font-size:10.5px;color:var(--t-ink-3);margin-left:2px">/ 42 Tagen</span></span>
+              <span style="display:block;height:3px;border-radius:var(--r-pill);background:var(--t-line);overflow:hidden"><span style="display:block;height:3px;width:81%;background:var(--t-accent-line)"></span></span>
+              <span style="font-size:10.5px;color:var(--t-ink-3)">verfügbar ab 12.10.</span>
+            </sc-if>
+          </div>
+          <div style="background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:10px 12px;display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Kadenz</span>
+            <span style="font-size:var(--fs-metric-xs);font-weight:500;font-variant-numeric:tabular-nums">182<span style="font-size:10.5px;color:var(--t-ink-3);margin-left:2px">spm</span></span>
+            <span style="font-size:10.5px;color:var(--t-ink-3)">Ø 178 · 1,18 m Schritt</span>
+          </div>
+        </div>
+
+        <div style="background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:12px 4px 6px 14px;display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;padding-right:10px">
+            <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-ink-3)">Splits</span>
+            <span style="font-size:var(--fs-micro);color:var(--t-ink-3)">Abweichung zu 4:24</span>
+          </div>
+          <div style="display:grid;grid-template-columns:26px 1fr 46px 40px 54px;gap:0 6px;align-items:center;font-size:11px;letter-spacing:.03em;color:var(--t-ink-3);padding:0 10px 5px 0;border-bottom:1px solid var(--t-line)">
+            <span>km</span><span>Pace</span><span style="text-align:right">HF</span><span style="text-align:right">hm</span><span style="text-align:right">Δ</span>
+          </div>
+          <sc-for list="{{ splits }}" as="s" hint-placeholder-count="6">
+            <div style="display:grid;grid-template-columns:26px 1fr 46px 40px 54px;gap:0 6px;align-items:center;padding:5px 10px 5px 0;border-bottom:1px solid var(--t-line);font-variant-numeric:tabular-nums;font-size:var(--fs-label)">
+              <span style="color:var(--t-ink-3)">{{ s.km }}</span>
+              <span style="display:flex;align-items:center;gap:6px">
+                <span style="font-weight:500">{{ s.pace }}</span>
+                <span style="flex:1;height:4px;border-radius:var(--r-pill);background:{{ s.barBg }};max-width:76px"><span style="display:block;height:4px;border-radius:var(--r-pill);width:{{ s.barW }};background:{{ s.barInk }}"></span></span>
+              </span>
+              <span style="text-align:right;color:var(--t-ink-2)">{{ s.hr }}</span>
+              <span style="text-align:right;color:var(--t-ink-3)">{{ s.elev }}</span>
+              <span style="text-align:right;color:{{ s.devInk }}">{{ s.dev }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="background:var(--t-surface);border-radius:var(--r-lg);box-shadow:var(--sh-glow);padding:13px 14px 14px;display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:center;gap:7px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="var(--t-accent-ink)"><path d="M12 2.2l1.7 7.1 7.1 1.7-7.1 1.7L12 21.8l-1.7-9.1L3.2 11l7.1-1.7z"></path></svg>
+            <span style="font-size:var(--fs-micro);letter-spacing:var(--ls-micro);text-transform:uppercase;color:var(--t-accent-ink)">KI-Kurzanalyse</span>
+            <span style="flex:1"></span>
+            <span style="font-size:var(--fs-micro);color:var(--t-ink-3)">{{ aiStamp }}</span>
+          </div>
+          <p style="margin:0;font-size:var(--fs-sub);line-height:1.55;color:var(--t-ink-2)">Kontrollierter Tempolauf: 44 % der Zeit in Z2, der Block ab km 8 lag mit 4:05/km sauber in Z4. Das Decoupling von 4,8 % zeigt, dass die Aerobe Basis den Reiz getragen hat — bei über 6 % wäre der Block zu lang gewesen.</p>
+          <p style="margin:0;font-size:var(--fs-sub);line-height:1.55;color:var(--t-ink-2)">GAP 4:19/km bei 148 hm bestätigt die Pace trotz Anstiegen. Kadenz mit 182 spm vier Schritte über deinem Schnitt, typisch für Tempoblöcke. hrTSS 78 statt geplanter 70 — die Woche schließt bei 412 TSS.</p>
+          <div style="font-size:var(--fs-micro);line-height:1.5;color:var(--t-ink-3);padding-top:4px;border-top:1px solid var(--t-line)">
+            <span style="font-family:ui-monospace,Menlo,monospace;color:var(--t-ink-2)">‹model›</span> · <span style="font-family:ui-monospace,Menlo,monospace;color:var(--t-ink-2)">‹tokens›</span> Tokens · KI-generiert, kann Fehler enthalten.
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:12px;padding-top:4px">
+        <div style="height:42px;width:200px;border-radius:var(--r-sm);background:linear-gradient(90deg,var(--t-surface),var(--t-surface-2),var(--t-surface));background-size:220% 100%;animation:tempo-shimmer 1.4s linear infinite"></div>
+        <div style="height:62px;border-radius:var(--r-lg);background:linear-gradient(90deg,var(--t-surface),var(--t-surface-2),var(--t-surface));background-size:220% 100%;animation:tempo-shimmer 1.4s linear infinite"></div>
+        <div style="height:150px;border-radius:var(--r-lg);background:linear-gradient(90deg,var(--t-surface),var(--t-surface-2),var(--t-surface));background-size:220% 100%;animation:tempo-shimmer 1.4s linear infinite"></div>
+        <div style="height:210px;border-radius:var(--r-lg);background:linear-gradient(90deg,var(--t-surface),var(--t-surface-2),var(--t-surface));background-size:220% 100%;animation:tempo-shimmer 1.4s linear infinite"></div>
+        <div style="height:120px;border-radius:var(--r-lg);background:linear-gradient(90deg,var(--t-surface),var(--t-surface-2),var(--t-surface));background-size:220% 100%;animation:tempo-shimmer 1.4s linear infinite"></div>
+        <div style="height:180px;border-radius:var(--r-lg);background:linear-gradient(90deg,var(--t-surface),var(--t-surface-2),var(--t-surface));background-size:220% 100%;animation:tempo-shimmer 1.4s linear infinite"></div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:14px;padding:80px 8px 0;text-align:center">
+        <svg width="120" height="120" viewBox="0 0 120 120" fill="none"><rect x="4" y="4" width="112" height="112" rx="18" stroke="var(--t-line)" stroke-width="2" stroke-dasharray="5 8"></rect><path d="M22 84 C 44 76, 52 52, 74 46 S 96 38, 100 30" stroke="var(--t-line-strong)" stroke-width="2.4" stroke-linecap="round"></path></svg>
+        <div style="font-size:var(--fs-metric-xs);font-weight:500">Keine Aktivitäten</div>
+        <div style="font-size:var(--fs-sub);line-height:1.5;color:var(--t-ink-3);max-width:270px">Sobald ein Lauf synchronisiert ist, erscheint hier die Analyse mit Splits, Zonen und Kennzahlen.</div>
+        <button type="button" class="btn btn-primary btn-block" style="max-width:270px;min-height:var(--touch);margin:4px 0 0;font-size:var(--fs-body);color:var(--t-accent-ink);border-color:var(--t-accent)">FIT-Datei importieren</button>
+      </div>
+    </sc-if>
+  </div>
+
+  <div style="position:absolute;left:0;right:0;bottom:0;padding:0 8px calc(var(--safe-bottom) - 12px);background:color-mix(in srgb, var(--t-bg) 88%, transparent);backdrop-filter:blur(14px);border-top:1px solid var(--t-line)">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);height:var(--tabbar-h)">
+      <button type="button" style="border:0;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0;color:var(--t-accent-ink);font-family:inherit">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8.2"></circle><path d="M12 3.8a8.2 8.2 0 0 1 6.4 3.1" stroke-width="2.6" stroke-linecap="round"></path></svg>
+        <span style="font-size:10px">Heute</span>
+      </button>
+      <button type="button" style="border:0;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0;color:var(--t-ink-3);font-family:inherit">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3.5 20V4.5"></path><path d="M3.5 20h16.5"></path><path d="M6.5 16l4-5 3.5 2.5 5-7.5"></path></svg>
+        <span style="font-size:10px">Trends</span>
+      </button>
+      <button type="button" style="border:0;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0;color:var(--t-ink-3);font-family:inherit">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"></rect><path d="M3.5 10h17M8 3.5v3M16 3.5v3"></path></svg>
+        <span style="font-size:10px">Plan</span>
+      </button>
+      <button type="button" style="border:0;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0;color:var(--t-ink-3);font-family:inherit">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M20.5 12.2c0 4.1-3.8 7.4-8.5 7.4-1 0-2-.15-2.9-.42L4 20.8l1.3-3.5A7.1 7.1 0 0 1 3.5 12.2c0-4.1 3.8-7.4 8.5-7.4s8.5 3.3 8.5 7.4z"></path></svg>
+        <span style="font-size:10px">Coach</span>
+      </button>
+      <button type="button" style="border:0;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0;color:var(--t-ink-3);font-family:inherit">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3.5 7.5h17M3.5 16.5h17"></path><circle cx="9" cy="7.5" r="2.4" fill="var(--t-bg)"></circle><circle cx="15" cy="16.5" r="2.4" fill="var(--t-bg)"></circle></svg>
+        <span style="font-size:10px">Mehr</span>
+      </button>
+    </div>
+    <div style="display:flex;justify-content:center;padding-top:2px"><span style="width:134px;height:5px;border-radius:var(--r-pill);background:var(--t-ink-3);opacity:.5"></span></div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;ready&quot;,&quot;aufbau&quot;,&quot;loading&quot;,&quot;empty&quot;,&quot;offline&quot;,&quot;error&quot;],&quot;default&quot;:&quot;ready&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Zustand&quot;}}">
+class Component extends DCLogic {
+  state = { i: -1 };
+
+  series() {
+    if (this._s) return this._s;
+    const n = 66, a = [];
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1);
+      let hr, pace;
+      if (t < 0.12) { hr = 126 + (t / 0.12) * 24; pace = 5.05 - (t / 0.12) * 0.6; }
+      else if (t < 0.62) { hr = 150 + 3 * Math.sin(i * 0.8) + (t - 0.12) * 10; pace = 4.42 + 0.06 * Math.sin(i * 1.1); }
+      else if (t < 0.86) { hr = 161 + 7 * Math.sin((t - 0.62) * 9) + (t - 0.62) * 22; pace = 4.06 + 0.05 * Math.sin(i * 1.3); }
+      else { hr = 162 - (t - 0.86) * 105; pace = 4.55 + (t - 0.86) * 2.2; }
+      a.push({ km: t * 12.4, hr: Math.round(hr), pace });
+    }
+    this._s = a;
+    return a;
+  }
+
+  zone(hr) {
+    if (hr < 130) return ["Z1", "var(--z1)", "var(--z1-band)"];
+    if (hr < 146) return ["Z2", "var(--z2)", "var(--z2-band)"];
+    if (hr < 158) return ["Z3", "var(--z3)", "var(--z3-band)"];
+    if (hr < 168) return ["Z4", "var(--z4)", "var(--z4-band)"];
+    return ["Z5", "var(--z5)", "var(--z5-band)"];
+  }
+
+  fmtPace(p) {
+    const m = Math.floor(p), s = Math.round((p - m) * 60);
+    return m + ":" + String(s).padStart(2, "0");
+  }
+
+  pick(e) {
+    const r = e.currentTarget.getBoundingClientRect();
+    const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    const a = this.series();
+    this.setState({ i: Math.round(f * (a.length - 1)) });
+  }
+
+  splitRows() {
+    const raw = [
+      [1, 4.72, 141, 6], [2, 4.48, 148, -4], [3, 4.43, 150, 12], [4, 4.40, 151, 22],
+      [5, 4.45, 152, 8], [6, 4.38, 154, -12], [7, 4.35, 155, 4], [8, 4.10, 163, 18],
+      [9, 4.06, 166, 24], [10, 4.08, 167, -6], [11, 4.28, 160, -14], [12, 4.55, 149, 2],
+    ];
+    const avg = 4.4;
+    return raw.map(([km, p, hr, el]) => {
+      const d = p - avg;
+      const fast = d < -0.02, slow = d > 0.02;
+      const secs = Math.round(Math.abs(d) * 60);
+      return {
+        km: String(km),
+        pace: this.fmtPace(p),
+        hr: String(hr),
+        elev: (el > 0 ? "+" : "") + el,
+        dev: (d < 0 ? "−" : "+") + secs + " s",
+        devInk: fast ? "var(--st-good)" : slow ? "var(--st-caution)" : "var(--t-ink-3)",
+        barBg: "var(--t-line)",
+        barW: Math.min(100, Math.round(Math.abs(d) * 220)) + "%",
+        barInk: fast ? "var(--st-good)" : slow ? "var(--st-caution)" : "var(--t-ink-3)",
+      };
+    });
+  }
+
+  renderVals() {
+    const s = this.props.state || "ready";
+    const isError = s === "error", isOffline = s === "offline";
+    const isLoading = s === "loading", isEmpty = s === "empty", isAufbau = s === "aufbau";
+    const a = this.series();
+    const hrY = (hr) => (150 - ((hr - 115) / 65) * 150).toFixed(1);
+    const paceY = (p) => (((p - 3.9) / 1.25) * 150).toFixed(1);
+    const pts = (f) => a.map((d, i) => ((i / (a.length - 1)) * 330).toFixed(1) + "," + f(d)).join(" ");
+    const i = this.state.i;
+    const cur = i >= 0 ? a[i] : null;
+    const z = cur ? this.zone(cur.hr) : ["", "", ""];
+
+    return {
+      isLoading, isEmpty, isError,
+      hasData: !isLoading && !isEmpty,
+      dataOpacity: isOffline || isError ? 0.72 : 1,
+      showBanner: isOffline || isError,
+      bannerText: isError
+        ? "Upload zu intervals.icu fehlgeschlagen. Analyse lokal berechnet."
+        : "Offline — Aktivität lokal gespeichert, Upload folgt bei Verbindung.",
+      bannerBg: isError ? "var(--st-warn-soft)" : "var(--st-neutral-soft)",
+      bannerLine: isError ? "var(--st-warn)" : "var(--t-line-strong)",
+      bannerDot: isError ? "var(--st-warn)" : "var(--st-neutral)",
+      aiStamp: isOffline || isError ? "lokal · 19:38" : "19:41",
+
+      gapBuilding: isAufbau, gapValue: !isAufbau,
+      efBuilding: isAufbau, efValue: !isAufbau,
+      decStale: isAufbau || isOffline || isError,
+      decFresh: !(isAufbau || isOffline || isError),
+
+      hrPoints: pts((d) => hrY(d.hr)),
+      pacePoints: pts((d) => paceY(d.pace)),
+      splits: this.splitRows(),
+
+      scrubOn: !!cur, scrubOff: !cur,
+      scrubX: cur ? ((i / (a.length - 1)) * 100).toFixed(2) + "%" : "0%",
+      scrubOpacity: cur ? 0.9 : 0,
+      scrubKm: cur ? cur.km.toFixed(1).replace(".", ",") : "",
+      scrubPace: cur ? this.fmtPace(cur.pace) : "",
+      scrubHr: cur ? String(cur.hr) : "",
+      scrubZone: z[0], scrubZoneInk: z[1], scrubZoneBand: z[2],
+      onScrub: (e) => { this._down = true; this.pick(e); },
+      onScrubMove: (e) => { if (this._down) this.pick(e); },
+      onScrubEnd: () => { this._down = false; },
+    };
+  }
+}
+
+</script>
+</body>
+</html>

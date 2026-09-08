@@ -1,0 +1,17 @@
+services:
+  tempo:
+    build: .
+    image: tempo:latest
+    restart: unless-stopped
+    env_file: .env
+    # Bound to loopback only. Everything from outside arrives through the
+    # Cloudflare Tunnel, never directly on the network interface.
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./data:/app/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

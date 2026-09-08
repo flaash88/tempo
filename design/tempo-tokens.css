@@ -1,0 +1,148 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   Tempo — Design Tokens
+   Basis: Nocturne (Farbrollen, Inter, Radien 8px, Akzent #9184d9).
+   Ergänzt um: feste Zonenpalette Z1–Z5, Statuslogik, Datentypo-Skala,
+   iOS-Safe-Areas. Dark Mode ist der Default (:root), Light Mode als
+   [data-theme="light"] Override — 1:1 übertragbar nach React+Tailwind.
+   ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Grund & Flächen */
+  --t-bg: #161826;
+  --t-bg-deep: #101119;
+  --t-surface: #1e2130;
+  --t-surface-2: #262a3a;
+  --t-line: rgba(233, 233, 237, 0.10);
+  --t-line-strong: rgba(233, 233, 237, 0.18);
+
+  /* Ink */
+  --t-ink: #e9e9ed;
+  --t-ink-2: #b2b6ca;
+  --t-ink-3: #8a8ea3;
+
+  /* Akzent — eine Farbe, nur für Aktionen (Nocturne-Blurple) */
+  --t-accent: #9184d9;
+  --t-accent-ink: #b5abfc;
+  --t-accent-soft: rgba(145, 132, 217, 0.14);
+  --t-accent-line: rgba(145, 132, 217, 0.38);
+
+  /* Statuslogik: gut / neutral / Vorsicht / Warnung */
+  --st-good: #59c08d;
+  --st-good-soft: rgba(89, 192, 141, 0.16);
+  --st-neutral: #9397ab;
+  --st-neutral-soft: rgba(147, 151, 171, 0.16);
+  --st-caution: #e0b25f;
+  --st-caution-soft: rgba(224, 178, 95, 0.16);
+  --st-warn: #e2645f;
+  --st-warn-soft: rgba(226, 100, 95, 0.16);
+
+  /* Zonenpalette — fix, identisch in jedem Chart, jeder Bar, jedem Badge */
+  --z1: #5c86b3;
+  --z2: #4fa08c;
+  --z3: #b3a95c;
+  --z4: #cf8352;
+  --z5: #c05777;
+  --z1-band: rgba(92, 134, 179, 0.15);
+  --z2-band: rgba(79, 160, 140, 0.15);
+  --z3-band: rgba(179, 169, 92, 0.15);
+  --z4-band: rgba(207, 131, 82, 0.15);
+  --z5-band: rgba(192, 87, 119, 0.15);
+
+  /* Typo-Skala — Ziffern dominieren, Labels klein */
+  --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  --font-num: "Inter", system-ui, sans-serif;
+  --fs-hero: 64px;    /* Readiness */
+  --fs-metric: 34px;  /* Kopfzeilen-Kennzahl */
+  --fs-metric-sm: 22px;
+  --fs-metric-xs: 17px;
+  --fs-body: 15px;
+  --fs-sub: 13px;
+  --fs-label: 12px;
+  --fs-micro: 10.5px; /* Uppercase-Label */
+  --lh-tight: 1.02;
+  --lh-body: 1.45;
+  --ls-micro: 0.10em;
+  --ls-num: -0.02em;
+
+  /* Spacing — 4er-Raster (mobiles Touch-Raster über Nocturnes 0.7×-Dichte) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 28px;
+  --sp-7: 40px;
+
+  /* Radien */
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --r-pill: 999px;
+
+  /* Elevation — auf dunklem Grund: Kante + Umgebungsdunkel */
+  --sh-1: 0 0 0 1px rgba(233, 233, 237, 0.07);
+  --sh-2: 0 0 0 1px rgba(233, 233, 237, 0.09), 0 8px 24px rgba(0, 0, 0, 0.5);
+  --sh-glow: 0 0 0 1px var(--t-accent-line), 0 0 24px rgba(145, 132, 217, 0.12);
+
+  /* Layout / Safe Area */
+  --safe-top: 47px;
+  --safe-bottom: 34px;
+  --tabbar-h: 49px;
+  --touch: 44px;
+}
+
+[data-theme="light"] {
+  --t-bg: #eef0f7;
+  --t-bg-deep: #e3e6f0;
+  --t-surface: #fbfbfe;
+  --t-surface-2: #f1f2f9;
+  --t-line: rgba(41, 43, 49, 0.12);
+  --t-line-strong: rgba(41, 43, 49, 0.22);
+
+  --t-ink: #23252f;
+  --t-ink-2: #4b4f5d;
+  --t-ink-3: #6b7080;
+
+  --t-accent: #6a5cb0;
+  --t-accent-ink: #574a99;
+  --t-accent-soft: rgba(106, 92, 176, 0.10);
+  --t-accent-line: rgba(106, 92, 176, 0.32);
+
+  --st-good: #1f7a54;
+  --st-good-soft: rgba(31, 122, 84, 0.12);
+  --st-neutral: #6b7080;
+  --st-neutral-soft: rgba(107, 112, 128, 0.12);
+  --st-caution: #8a6413;
+  --st-caution-soft: rgba(138, 100, 19, 0.12);
+  --st-warn: #ab3d36;
+  --st-warn-soft: rgba(171, 61, 54, 0.12);
+
+  --z1: #3f6c99;
+  --z2: #2c7f6d;
+  --z3: #8a7f2d;
+  --z4: #b06334;
+  --z5: #a33a58;
+  --z1-band: rgba(63, 108, 153, 0.14);
+  --z2-band: rgba(44, 127, 109, 0.14);
+  --z3-band: rgba(138, 127, 45, 0.14);
+  --z4-band: rgba(176, 99, 52, 0.14);
+  --z5-band: rgba(163, 58, 88, 0.14);
+
+  --sh-1: 0 0 0 1px rgba(41, 43, 49, 0.07);
+  --sh-2: 0 0 0 1px rgba(41, 43, 49, 0.06), 0 6px 18px rgba(41, 43, 49, 0.10);
+  --sh-glow: 0 0 0 1px var(--t-accent-line), 0 0 20px rgba(106, 92, 176, 0.10);
+}
+
+@keyframes tempo-shimmer {
+  0%   { background-position: 180% 0; }
+  100% { background-position: -80% 0; }
+}
+@keyframes tempo-fadein {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Kein persistenter Scrollbalken im standalone-PWA-Screen */
+[data-tempo-scroll] { scrollbar-width: none; -ms-overflow-style: none; }
+[data-tempo-scroll]::-webkit-scrollbar { width: 0; height: 0; display: none; }
