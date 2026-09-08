@@ -95,6 +95,40 @@ def test_the_ai_answer_names_the_model_that_wrote_it(spec: dict[str, Any]) -> No
     assert "cached" in answer
 
 
+def test_the_write_back_endpoints_exist(spec: dict[str, Any]) -> None:
+    """Phase 6: the Plan screen's "An Uhr senden" needs all four."""
+    available = {
+        (method, path) for path, methods in spec["paths"].items() for method in methods
+    }
+
+    assert ("post", "/api/plan/workouts") in available
+    assert ("put", "/api/plan/workouts/{workout_id}") in available
+    assert ("post", "/api/plan/workouts/{workout_id}/confirm") in available
+    assert ("post", "/api/plan/workouts/{workout_id}/push") in available
+
+
+def test_every_planned_session_carries_its_sync_state(spec: dict[str, Any]) -> None:
+    """The design draws a state per session, so it travels per session."""
+    summary = spec["components"]["schemas"]["PlannedWorkoutSummary"]["properties"]
+    state = spec["components"]["schemas"]["WorkoutSyncState"]["properties"]
+
+    assert "sync" in summary
+    assert set(state) == {
+        "status",
+        "confirmed_at",
+        "synced_at",
+        "error",
+        "sendable",
+    }
+    assert state["status"]["enum"] == [
+        "not_sent",
+        "sending",
+        "on_watch",
+        "outdated",
+        "failed",
+    ]
+
+
 def test_no_endpoint_returns_a_bare_number_where_a_metric_belongs(
     spec: dict[str, Any],
 ) -> None:
