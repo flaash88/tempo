@@ -4,12 +4,17 @@ The metric envelope is the contract for the whole API: no endpoint returns
 a bare number. Every value arrives with the evidence behind it, so the
 interface can tell "63" apart from "63, but from a three month old block"
 and from "not yet, 34 of 42 days".
+
+The field lists follow ``design/README.md``: each screen's endpoint carries
+what that screen displays. Where a mock-up shows a threshold in its text
+("mindestens 7 Nächte"), the number is not in the response text — it is in
+``GET /api/thresholds``, and the frontend fills the sentence at runtime.
 """
 
 from __future__ import annotations
 
 import datetime as dt
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -55,3 +60,382 @@ class HealthResponse(BaseModel):
         default=None,
         description="Applied Alembic revision, None if not migrated yet.",
     )
+
+
+# --- authentication ----------------------------------------------------
+
+
+class LoginRequest(BaseModel):
+    password: str = Field(min_length=1)
+
+
+class SessionResponse(BaseModel):
+    """Whether the caller has a session. Never carries a token."""
+
+    authenticated: bool
+    # False when no password hash is configured, so the interface can say
+    # "finish the setup" instead of "wrong password".
+    configured: bool = True
+
+
+# --- shared value objects ----------------------------------------------
+
+
+class BaselineValue(BaseModel):
+    """A rolling baseline and the band around it, in the reading's units."""
+
+    mean: float
+    lower: float
+    upper: float
+    sd: float
+    days: int
+    # Which field of the source the readings came from. Carried, never
+    # interpreted: nothing here asserts which HRV measure this is.
+    source_field: str | None = None
+
+
+class FormValue(BaseModel):
+    ctl: float
+    atl: float
+    tsb: float
+
+
+class ZoneBounds(BaseModel):
+    """Five zones as ascending lower bounds, in the value's own unit."""
+
+    kind: Literal["hr", "speed"]
+    model: str
+    lower_bounds: list[float]
+
+
+class ZoneShare(BaseModel):
+    zone: int = Field(ge=1, le=5)
+    seconds: int = Field(ge=0)
+
+
+class SyncSourceStatus(BaseModel):
+    source: str
+    status: str | None = None
+    last_success_at: dt.datetime | None = None
+    last_activity_start: dt.datetime | None = None
+    last_wellness_date: dt.date | None = None
+    started_at: dt.datetime | None = None
+    finished_at: dt.datetime | None = None
+    detail: str | None = None
+    # True while a run of this source is in flight.
+    running: bool = False
+
+
+class SyncStatusResponse(BaseModel):
+    sources: list[SyncSourceStatus]
+    # When the next incremental run is allowed, given the hourly guard.
+    next_allowed_at: dt.datetime | None = None
+
+
+class SyncStartedResponse(BaseModel):
+    started: bool
+    detail: str
+
+
+# --- today -------------------------------------------------------------
+
+
+class SleepValue(BaseModel):
+    seconds: int
+    score: int | None = None
+
+
+class PlannedWorkoutSummary(BaseModel):
+    """One calendar entry, as the plan and today screens show it."""
+
+    id: str
+    date: dt.date
+    category: str | None = None
+    sport: str | None = None
+    name: str | None = None
+    description: str | None = None
+    target_time_s: int | None = None
+    target_dist_m: float | None = None
+    target_load: float | None = None
+    workout_doc: dict[str, Any] | None = None
+    external_id: str | None = None
+    # True when an activity of the same sport is already recorded that day.
+    done: bool = False
+
+
+class TodayResponse(BaseModel):
+    """The Heute screen: one tile per metric, each with its own state."""
+
+    date: dt.date
+    readiness: MetricEnvelope[int]
+    readiness_components: dict[str, float | None]
+    readiness_weights: dict[str, float]
+    hrv: MetricEnvelope[BaselineValue]
+    hrv_latest: float | None = None
+    hrv_source_field: str | None = None
+    resting_hr: MetricEnvelope[BaselineValue]
+    resting_hr_latest: int | None = None
+    sleep: MetricEnvelope[SleepValue]
+    form: MetricEnvelope[FormValue]
+    acwr: MetricEnvelope[float]
+    planned: PlannedWorkoutSummary | None = None
+    # The training block this week sits in, when the calendar says so.
+    plan_context: str | None = None
+    sync: SyncStatusResponse
+    # Rendered from the configuration, never hard coded in the interface.
+    ai_model: str
+
+
+# --- activities --------------------------------------------------------
+
+
+class ActivityListItem(BaseModel):
+    id: str
+    start_local: dt.datetime
+    sport: str
+    distance_m: float | None = None
+    moving_s: int | None = None
+    avg_hr: int | None = None
+    avg_pace_s_per_km: float | None = None
+    has_stream: bool = False
+
+
+class ActivityListResponse(BaseModel):
+    activities: list[ActivityListItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class LapItem(BaseModel):
+    index: int
+    distance_m: float | None = None
+    duration_s: int | None = None
+    avg_hr: int | None = None
+    avg_pace_s_per_km: float | None = None
+    # Difference to the planned pace, where the calendar has one.
+    pace_delta_s_per_km: float | None = None
+
+
+class ActivityDetailResponse(BaseModel):
+    """The Aktivitätsdetail screen."""
+
+    id: str
+    start_local: dt.datetime
+    sport: str
+    distance_m: float | None = None
+    moving_s: int | None = None
+    elapsed_s: int | None = None
+    elevation_gain_m: float | None = None
+    avg_hr: int | None = None
+    max_hr: int | None = None
+    avg_pace_s_per_km: float | None = None
+    source: str
+    has_stream: bool = False
+
+    # Derived, each with its own evidence.
+    trimp: MetricEnvelope[float]
+    hr_tss: MetricEnvelope[float]
+    r_tss: MetricEnvelope[float]
+    gap_pace_s_per_km: MetricEnvelope[float]
+    efficiency_factor: MetricEnvelope[float]
+    decoupling: MetricEnvelope[float]
+    avg_cadence_spm: int | None = None
+
+    zones: list[ZoneShare] = Field(default_factory=list)
+    zone_bounds: ZoneBounds | None = None
+    seconds_below_zone_1: int = 0
+    seconds_unknown: int = 0
+    laps: list[LapItem] = Field(default_factory=list)
+    planned: PlannedWorkoutSummary | None = None
+
+
+class StreamsResponse(BaseModel):
+    """The chart data. Gaps stay gaps: null means not recorded."""
+
+    activity_id: str
+    resolution_s: int = Field(
+        ge=1, description="Seconds per returned sample after decimation."
+    )
+    samples: int
+    fields: list[str]
+    offset_s: list[int]
+    series: dict[str, list[float | None]]
+
+
+# --- trends ------------------------------------------------------------
+
+
+class FitnessPointOut(BaseModel):
+    date: dt.date
+    load: float | None = None
+    ctl: float | None = None
+    atl: float | None = None
+    tsb: float | None = None
+    confidence: float = 0.0
+    days_of_history: int = 0
+
+
+class WeekVolume(BaseModel):
+    week_start: dt.date
+    distance_m: float
+    duration_s: int
+    load: float | None = None
+    zones: list[ZoneShare] = Field(default_factory=list)
+
+
+class BaselinePoint(BaseModel):
+    date: dt.date
+    value: float
+    mean: float | None = None
+    lower: float | None = None
+    upper: float | None = None
+
+
+class TrendsResponse(BaseModel):
+    """The Trends screen."""
+
+    window: Literal["6w", "12w", "52w"]
+    from_date: dt.date
+    to_date: dt.date
+    fitness: list[FitnessPointOut] = Field(default_factory=list)
+    weeks: list[WeekVolume] = Field(default_factory=list)
+    hrv: MetricEnvelope[BaselineValue]
+    hrv_series: list[BaselinePoint] = Field(default_factory=list)
+    hrv_source_field: str | None = None
+    resting_hr: MetricEnvelope[BaselineValue]
+    resting_hr_series: list[BaselinePoint] = Field(default_factory=list)
+    vo2max: MetricEnvelope[float]
+    vdot: MetricEnvelope[float]
+    monotony: MetricEnvelope[float]
+    strain: MetricEnvelope[float]
+    average_week_distance_m: float | None = None
+
+
+# --- performance -------------------------------------------------------
+
+
+class BestEffortOut(BaseModel):
+    duration_s: int
+    distance_m: float
+    speed_m_s: float
+    pace_s_per_km: float
+    activity_id: str | None = None
+    date: dt.date | None = None
+
+
+class CriticalSpeedValue(BaseModel):
+    cs_m_s: float
+    cs_pace_s_per_km: float
+    d_prime_m: float
+    points: int
+    r_squared: float
+
+
+class PredictionOut(BaseModel):
+    method: Literal["riegel", "vdot"]
+    seconds: float
+    pace_s_per_km: float
+
+
+class RacePrediction(BaseModel):
+    """Both methods side by side, never averaged."""
+
+    distance_m: float
+    predictions: list[PredictionOut]
+    # The effort the prediction rests on, and whether it has aged out.
+    based_on_date: dt.date | None = None
+    stale: bool = False
+
+
+class PerformanceResponse(BaseModel):
+    """The performance half of the Trends screen."""
+
+    best_efforts: list[BestEffortOut] = Field(default_factory=list)
+    critical_speed: MetricEnvelope[CriticalSpeedValue]
+    vdot: MetricEnvelope[float]
+    predictions: dict[str, RacePrediction] = Field(default_factory=dict)
+    # Which effort the predictions were derived from.
+    reference_distance_m: float | None = None
+    reference_seconds: float | None = None
+    reference_date: dt.date | None = None
+    predictions_stale: bool = False
+    prediction_stale_after_days: int
+
+
+# --- plan --------------------------------------------------------------
+
+
+class PlanResponse(BaseModel):
+    """The Plan screen."""
+
+    from_date: dt.date
+    to_date: dt.date
+    workouts: list[PlannedWorkoutSummary] = Field(default_factory=list)
+    planned_distance_m: float = 0.0
+    planned_duration_s: int = 0
+    planned_load: float | None = None
+    # Entries whose category is a target race rather than a session.
+    races: list[PlannedWorkoutSummary] = Field(default_factory=list)
+
+
+# --- settings ----------------------------------------------------------
+
+
+class CredentialStatus(BaseModel):
+    """Whether a key is configured, and which one it is. Never the key.
+
+    ``last4`` is there so the athlete can recognise which key is in place
+    without the API ever handing back something that could be extended into
+    the key itself — not even a masked form of it.
+    """
+
+    valid: bool
+    last4: str | None = None
+
+
+class AiUsage(BaseModel):
+    month: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost_eur: float = 0.0
+    budget_eur: float = 0.0
+    calls: int = 0
+
+
+class SettingsResponse(BaseModel):
+    """The Einstellungen screen."""
+
+    hr_max: int | None = None
+    hr_rest: int | None = None
+    lthr: int | None = None
+    threshold_pace_s_per_km: float | None = None
+    sleep_target_s: int | None = None
+    zone_model: str
+    hr_zones: ZoneBounds | None = None
+    pace_zones: ZoneBounds | None = None
+    updated_at: dt.datetime | None = None
+
+    intervals: CredentialStatus
+    anthropic: CredentialStatus
+    intervals_athlete_id: str
+    ai_model_daily: str
+    ai_model_planning: str
+    ai_usage: AiUsage
+    garmin_direct_enabled: bool
+    readiness_weights: dict[str, float]
+    fit_files_pending: int = 0
+    sync: SyncStatusResponse
+
+
+class SettingsUpdate(BaseModel):
+    """What may be changed. No credentials: those live in the environment."""
+
+    model_config = {"extra": "forbid"}
+
+    hr_max: int | None = Field(default=None, ge=100, le=250)
+    hr_rest: int | None = Field(default=None, ge=25, le=120)
+    lthr: int | None = Field(default=None, ge=80, le=230)
+    threshold_pace_s_per_km: float | None = Field(default=None, gt=120, lt=1200)
+    sleep_target_s: int | None = Field(default=None, ge=3600, le=57600)
+    zone_model: Literal["friel_run_lthr", "percent_hr_max"] | None = None
