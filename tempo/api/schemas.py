@@ -466,6 +466,61 @@ class SettingsResponse(BaseModel):
     sync: SyncStatusResponse
 
 
+# --- the AI layer ------------------------------------------------------
+
+
+class AiBudgetState(BaseModel):
+    """The month's spend against its limit.
+
+    Travels with every AI answer, including the refused one: the interface
+    shows the same tile either way, and the only difference is whether it
+    reads "noch 4,10 EUR" or "Budget erreicht".
+    """
+
+    month: str
+    spent_eur: float
+    budget_eur: float
+    remaining_eur: float
+    exhausted: bool
+
+
+class AiAnswerResponse(BaseModel):
+    """One interpretation, and what produced it.
+
+    ``model`` is the model that actually answered, taken from the response
+    rather than from the request, because the footer in the interface names
+    the model and must not name one that did not write the text.
+    """
+
+    task: str
+    text: str
+    model: str
+    created_at: dt.datetime
+    # True when nothing was sent: the same numbers had already been asked
+    # about, so the stored answer stands.
+    cached: bool
+    budget: AiBudgetState
+    features_bytes: int
+    features_trimmed: list[str] = Field(
+        default_factory=list,
+        description="Context dropped to fit the size limit, in the order dropped.",
+    )
+    cost_eur: float = 0.0
+
+
+class AiBudgetError(BaseModel):
+    """The defined state of a spent budget. Not a fault."""
+
+    detail: str
+    budget: AiBudgetState
+
+
+class AiChatRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    question: str = Field(min_length=1, max_length=2000)
+
+
 class SettingsUpdate(BaseModel):
     """What may be changed. No credentials: those live in the environment."""
 

@@ -8,8 +8,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from tempo import __version__
+from tempo.ai.service import AiClientFactory, default_ai_client_factory
 from tempo.api.routes import (
     activities,
+    ai,
     auth,
     health,
     performance,
@@ -43,14 +45,15 @@ def create_app(
     settings: Settings | None = None,
     *,
     client_factory: ClientFactory | None = None,
+    ai_client_factory: AiClientFactory | None = None,
 ) -> FastAPI:
     """Build the application.
 
-    ``client_factory`` is how the outbound intervals.icu client gets in. It
-    is a parameter rather than a hard-wired import so a test can substitute
-    a mocked transport — a test that reaches the network is a broken test,
-    and the only reliable way to keep one from doing so is to leave it no
-    way to.
+    ``client_factory`` is how the outbound intervals.icu client gets in,
+    and ``ai_client_factory`` the same for Anthropic. They are parameters
+    rather than hard-wired imports so a test can substitute a mocked
+    transport — a test that reaches the network is a broken test, and the
+    only reliable way to keep one from doing so is to leave it no way to.
     """
     configure_logging()
     app = FastAPI(
@@ -64,6 +67,7 @@ def create_app(
     )
     app.state.settings = settings or get_settings()
     app.state.client_factory = client_factory or default_client_factory
+    app.state.ai_client_factory = ai_client_factory or default_ai_client_factory
     # /health stays outside /api and outside the session gate; everything
     # else requires one, including the endpoints that only read.
     app.include_router(health.router)
@@ -77,6 +81,7 @@ def create_app(
     app.include_router(thresholds.router)
     app.include_router(sync.router)
     app.include_router(wellness.router)
+    app.include_router(ai.router)
     return app
 
 
