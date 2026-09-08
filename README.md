@@ -34,14 +34,16 @@ App.
 
 ## Stand der Entwicklung
 
-Phase 3 von 7. Fertig: Gerüst, Datenmodell, Migrationen, CLI,
+Phase 4 von 7. Fertig: Gerüst, Datenmodell, Migrationen, CLI,
 `GET /health`, die Ingestion (FIT-Parser, intervals.icu-Client mit
 Wasserstand, optionaler Garmin-Connector) und die Metrik-Engine — TRIMP,
 GAP nach Minetti, rTSS und hrTSS, Zeit in Zone, CTL/ATL/Form, ACWR,
 Monotonie und Strain, HFV- und Ruhe-HF-Baselines, Bereitschaft,
-Bestleistungen, Critical Speed, VDOT und Prognosen. Jede Kennzahl trägt
-Konfidenz, Historie und das Datum ihres letzten Datenpunkts. REST-API,
-KI-Schicht und die PWA folgen in den weiteren Phasen.
+Bestleistungen, Critical Speed, VDOT und Prognosen. Dazu die REST-API mit
+Anmeldung: jede Kennzahl in jeder Antwort trägt Konfidenz, Historie,
+Fortschritt und das Datum ihres letzten Datenpunkts, und
+`GET /api/thresholds` liefert alle Schwellen, damit die Oberfläche keine
+Zahl selbst vorhält. KI-Schicht und PWA folgen in den weiteren Phasen.
 
 `tempo recompute --all` zeigt den aktuellen Stand direkt an:
 
@@ -203,6 +205,20 @@ der Umgebung, Session-Cookie mit `httpOnly`, `Secure` und
 `SameSite=Lax`. Cloudflare Access wird nicht vorausgesetzt. Wer es
 zusätzlich davorschaltet, bekommt eine zweite Schicht — die App verlässt
 sich nicht darauf.
+
+```bash
+curl -c cookies -X POST https://tempo.example.com/api/auth/login \
+  -H 'Content-Type: application/json' -d '{"password":"…"}'
+curl -b cookies https://tempo.example.com/api/today
+```
+
+Der Cookie-Schlüssel wird aus dem Passwort-Hash abgeleitet: ein
+Passwortwechsel beendet damit jede laufende Sitzung. `GET /health` bleibt
+ohne Anmeldung erreichbar, alles unter `/api` nicht.
+
+Zugangsdaten kommen aus keiner Antwort zurück, auch nicht maskiert — die
+Einstellungen liefern nur `{"valid": true, "last4": "7f2c"}` — und lassen
+sich über die API auch nicht setzen: sie stehen in der Umgebung.
 
 ## Entwicklung
 

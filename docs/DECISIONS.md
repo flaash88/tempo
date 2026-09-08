@@ -530,3 +530,147 @@ Was hier nicht steht, ist nicht entschieden.
   nachträglich.** Es liest die Streams aus der Datenbank; eine Einheit, die
   vor dem Anlegen der Athletenwerte importiert wurde, wird beim nächsten
   Lauf bewertet, ohne Neuimport. Ein Test hält beides fest.
+
+---
+
+## Phase 4 — REST-API
+
+### Authentifizierung
+
+- **Ein Benutzer, ein Passwort, ein Cookie.** Der Session-Cookie ist
+  `httpOnly`, `Secure` und `SameSite=Lax` und trägt nichts als ein
+  Ablaufdatum und eine Signatur — keine Identität, keine Claims, nichts,
+  was für sich genommen wertvoll wäre.
+- **Der Signaturschlüssel wird aus dem Passwort-Hash abgeleitet**
+  (`blake2b` mit Domain-Trennung). Das spart ein zweites Geheimnis in der
+  Konfiguration, und ein Passwortwechsel beendet damit jede laufende
+  Sitzung — was ein Passwortwechsel tun soll. Der Hash verlässt den Server
+  nicht und ist aus dem Schlüssel nicht zurückrechenbar.
+- **Cloudflare Access wird nicht vorausgesetzt.** Wer es davorschaltet,
+  bekommt eine zweite Schicht; diese hier stützt sich auf keinen
+  Proxy-Header und lehnt eine Anfrage ohne gültiges Cookie in jedem Fall
+  ab.
+- **Eine unfertige Installation ist keine offene Tür.** Ohne
+  `TEMPO_PASSWORD_HASH` wird alles abgelehnt, statt alles durchzulassen;
+  `GET /api/auth/session` sagt zusätzlich, ob überhaupt eine Anmeldung
+  konfiguriert ist, damit die Oberfläche „Einrichtung abschließen" von
+  „Passwort falsch" unterscheiden kann.
+- **`/health` bleibt offen** und außerhalb von `/api`. Tunnel und
+  Container-Healthcheck brauchen es, und es enthält keine Athletendaten.
+- **Ein Test prüft, dass `Secure` wirkt**, indem er dieselbe Anmeldung über
+  `http` fährt: der Client sendet das Cookie dann nicht zurück, und die
+  Anfrage wird abgelehnt. Das Flag ist keine Dekoration.
+
+### Keine Zugangsdaten in Antworten
+
+- **Kein Key kommt zurück, auch nicht maskiert.** Das Mockup zeichnet
+  `sk-ant-•••• 7f2c`; die API liefert `{"valid": true, "last4": "7f2c"}`
+  und die Punkte malt die Oberfläche. Ein maskierter Key ist immer noch
+  ein Präfix eines Keys.
+- **Keys lassen sich über die API auch nicht setzen.** Sie stehen in der
+  Umgebung, eine Rotation ist damit eine Deployment-Handlung und nie etwas,
+  das ein Session-Cookie auslösen kann. `SettingsUpdate` lehnt unbekannte
+  Felder ab, statt sie stillschweigend zu ignorieren.
+- **Ein Test läuft über jede Antwort** und sucht nach dem Key, dem Präfix
+  und dem Passwort — nicht pro Route, sondern über alle.
+
+### Die Konfidenz-Hülle
+
+- **Jede Kennzahl in jeder Antwort trägt die vollständigen Metadaten.** Eine
+  einzige Umwandlung (`api/envelope.py`) wird von allen Routen benutzt,
+  damit keine versehentlich eine nackte Zahl oder eine halbe Hülle
+  ausliefert.
+- **Zwei Tests sichern das strukturell**: einer läuft über die Antworten und
+  prüft jede Hülle, einer über das OpenAPI-Schema und stellt fest, dass
+  kein als Kennzahl benanntes Feld etwas anderes als eine `MetricEnvelope`
+  ist.
+- **Baselines werden in den Einheiten der Messwerte ausgeliefert.** Mittel
+  und Band werden aus der Transformation zurückgerechnet, in der sie
+  gebaut wurden, damit die Oberfläche Millisekunden zeigt und keine
+  Logarithmen — während die Baseline selbst weiter mitführt, in welchem
+  Raum sie entstanden ist.
+
+### `GET /api/thresholds`
+
+- **Alle Mindesthistorien, Fenster und Schwellen**, dazu die
+  konfigurierbaren Werte so, wie sie tatsächlich in Kraft sind, *und* der
+  dokumentierte Default daneben. Das Frontend hält damit keine Zahl vor,
+  nicht einmal als Rückfallwert — die Sätze der Mockups („mindestens 7
+  Nächte", „34 / 42 Tagen") werden zur Laufzeit gefüllt.
+
+### `GET /api/performance`
+
+- **Prognosen werden als veraltet ausgewiesen, wenn die zugrundeliegende
+  Bestleistung älter als 90 Tage ist** (`PREDICTION_STALE_AFTER_DAYS`,
+  ebenfalls über `/api/thresholds` ausgeliefert). Bewusst länger als die
+  allgemeine 7-Tage-Grenze: eine Bestleistung ist ein Rekord und veraltet
+  nicht in einer Woche, aber ein Quartal ohne Wettkampf macht sie zur
+  Historie.
+- **Ausgeliefert wird sie trotzdem**, mit Kennzeichnung und Datum — dieselbe
+  Haltung wie bei Critical Speed. Zurückgehalten werden Zustandsgrößen,
+  nicht Rekorde.
+- **Die längste Bestleistung ist der Anker der Prognosen.** Je weiter außen
+  der Anker, desto weniger hängt die Vorhersage am Verhalten des Modells
+  bei kurzen Dauern.
+- **Riegel und VDOT stehen nebeneinander, nie gemittelt** — auch in der
+  Antwort, wo jede Distanz beide Methoden als Liste trägt.
+
+### Streams
+
+- **`resolution` dezimiert, es glättet nicht.** Eine gröbere Auflösung
+  behält jede n-te aufgezeichnete Sekunde und lässt den Rest weg. Einen
+  Bucket zu mitteln würde einen Messwert für eine Sekunde erfinden, die nie
+  gemessen wurde, und würde eine Lücke schließen, die der Parser
+  ausdrücklich bewahrt hat. Jeder gelieferte Punkt ist eine echte Messung
+  oder ein echtes `null`.
+- **`fields` prüft gegen eine Liste bekannter Kanäle** und lehnt Unbekanntes
+  mit 400 ab, statt es still zu ignorieren.
+
+### `POST /api/sync`
+
+- **Läuft im Hintergrund und antwortet mit 202.** Ein Vollsync dauert
+  Minuten; `GET /api/sync/status` liefert den Rest aus `sync_state` und
+  `sync_log`.
+- **Ein zweiter Lauf während eines laufenden wird mit 409 abgelehnt.**
+- **Der ausgehende Client kommt über `app.state.client_factory` herein.**
+  Das ist kein Testartefakt, sondern die einzige verlässliche Art, „keine
+  Live-Calls in Tests" durchzusetzen: ein Test kann keinen echten Aufruf
+  machen, weil er keinen Weg dazu hat.
+
+### Netzwerksperre in der Testsuite
+
+- **Eine `autouse`-Fixture blockiert Sockets in jedem Test.** Aufgefallen
+  ist das an einem Test, der 15 Sekunden brauchte: der Hintergrund-Sync
+  hat wirklich versucht, intervals.icu zu erreichen, und die Zeit war das
+  Backoff. Die Regel steht in `CLAUDE.md`; sie durchzusetzen statt sich an
+  sie zu erinnern ist der Unterschied zwischen einer Regel und einer
+  Absicht. Ein Test, der jetzt nach dem Netz greift, scheitert sofort mit
+  dem Grund.
+
+### Schemata gegen `design/README.md`
+
+- **Ein Test liest die Endpoint-Tabelle aus `design/README.md`** und prüft
+  gegen das OpenAPI-Schema, dass jeder dort genannte Endpoint existiert.
+  Die `/api/ai/`-Endpunkte sind ausgenommen und als Phase 5 benannt — auch
+  das prüft ein Test, damit die Ausnahme nicht stillschweigend zur
+  Dauerlösung wird.
+- **Die Feldlisten folgen den Mockups.** Was ein Screen anzeigt, liefert
+  sein Endpoint: Heute die sechs Kacheln samt Schlaf und geplanter Einheit,
+  das Aktivitätsdetail GAP, TRIMP, hrTSS, EF, Decoupling, Kadenz und
+  Zonenverteilung, Trends die CTL/ATL/TSB-Reihe, das HFV-Band, Wochenvolumen
+  mit Zonenanteilen, die Einstellungen Schwellenwerte, Zonengrenzen,
+  Modell, Verbrauch und Budget.
+- **Das Modell in der KI-Fußzeile kommt aus der Config** und steht in
+  `GET /api/today` als `ai_model` — nirgends hartkodiert.
+
+### Kleinigkeiten
+
+- **`GET /api/plan` ohne Zeitraum liefert die laufende Woche**, Montag bis
+  Sonntag. Zielwettkämpfe (`RACE_*`) werden von den Einheiten getrennt
+  geliefert, weil der Screen sie getrennt zeigt.
+- **Eine geplante Einheit gilt als erledigt**, wenn am selben Tag eine
+  Aktivität derselben Sportart aufgezeichnet ist.
+- **Pro Aktivität abgeleitete Werte haben ein Fenster von eins.** Sie
+  brauchen genau eine Einheit, und die ist ihre ganze Historie — aber die
+  Veraltung gilt weiter, weil ein Lauf vom Januar keine Aussage über heute
+  ist.
