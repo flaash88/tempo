@@ -714,3 +714,105 @@ Was hier nicht steht, ist nicht entschieden.
 - **Ein Sync ohne subjektive Werte überschreibt eine Handeingabe nicht.**
   Der Import setzt die drei Felder nur, wenn die Quelle überhaupt welche
   liefert.
+
+---
+
+## Phase 5 — KI-Schicht
+
+### Der HTTP-Weg statt des offiziellen SDK
+
+- **`tempo/ai/client.py` spricht die Messages-API über `httpx`**, nicht
+  über das `anthropic`-Paket. CLAUDE.md nennt `httpx` für ausgehende
+  Calls; eine dort nicht gelistete Abhängigkeit aufzunehmen wäre eine
+  Stack-Abweichung und die ist rückfragepflichtig.
+- **Der Preis dafür ist klein und der Nutzen konkret.** Benutzt wird ein
+  Endpunkt mit einer Antwortform, und der Transport ist injizierbar — was
+  überhaupt erst dafür sorgt, dass die Testsuite die API nie erreicht.
+- **Umkehrbar.** Wer das SDK will, tauscht ein Modul und lässt alles
+  andere stehen; die Entscheidung steht hier, damit sie im Review eine
+  Entscheidung ist und kein Versehen.
+
+### Das Feature-JSON ist die ganze Weltsicht der KI
+
+- **Unter 4 KB, hart geprüft.** Passt es nicht, wird in fester Reihenfolge
+  gekürzt — erst die Einzelaktivitäten, dann die Wochenvolumen, dann
+  Bestleistungen, dann der Plan — und das Dokument sagt selbst, was
+  fehlt (`omitted_for_size`). Ein gekürztes Dokument, das sich als
+  vollständiges ausgibt, würde als "zwei Wochen Pause" gelesen.
+- **`tempo/ai/features.py` liest `activity_stream` nirgends.** Nicht als
+  Regel im Prompt, sondern als Eigenschaft des Moduls: es gibt keinen
+  Codepfad, über den eine Sekundenreihe ins Kontextfenster kommt. Die
+  Einordnung einer Einheit bekommt die fertigen Kennzahlen aus demselben
+  Report, den der Detailscreen benutzt.
+- **Die Aktivitätsliste ist gedeckelt** (`MAX_RECENT_ACTIVITIES = 10`),
+  die Runden einer Einheit ebenfalls (`MAX_LAPS = 12`); mehr Runden werden
+  als Anzahl genannt statt weggelassen.
+- **Die Konfidenz-Metadaten reisen mit jeder Kennzahl mit.** Ein Wert, den
+  die App nicht anzeigt, ist ein Wert, den das Modell nicht deuten darf —
+  und erkennen kann es das nur an `have`, `required`, `confidence` und
+  `stale`, die im Dokument stehen.
+- **Was Gegenstand der Anfrage ist, wird nie gekürzt.** Die Einheit, über
+  die gefragt wird, steht außerhalb der Kürzungsreihenfolge.
+
+### Der System-Prompt
+
+- **Die vier geforderten Regeln stehen als benannte Konstanten** in
+  `tempo/ai/prompts.py` und werden je Aufgabe einzeln durch einen Test
+  geprüft. Wiedereinstieg und vorsichtiger Aufbau, keine Trend- oder
+  Baseline-Deutung unter der Mindesthistorie, keine medizinischen
+  Aussagen, konkrete Empfehlungen mit Dauer, Zielzone und Zweck. Eine
+  Regel, die nur im Fließtext eines Prompts steht, verschwindet bei der
+  nächsten Umformulierung unbemerkt.
+- **Der stabile Teil trägt den Cache-Breakpoint**, der volatile Teil — das
+  Feature-JSON — steht in der Nutzernachricht. Ob das Prefix lang genug
+  ist, damit der Cache greift, wird nicht behauptet: `ai_call` führt
+  `cache_read_tokens` mit, und eine Folge von Aufrufen mit lauter Nullen
+  ist der Beleg dafür, dass er es nicht tut.
+
+### Budget mit hartem Stopp
+
+- **Geprüft wird vor dem Bauen des Dokuments, nicht vor dem Senden.** Bei
+  erreichtem Limit gibt es keinen Call, keine kleinere Anfrage und keine
+  billigere Antwort — nur den definierten Zustand.
+- **`402 Payment Required`** ist die Antwort, mit dem Budgetstand im Body.
+  Nicht `429`, weil hier nichts rate-limitiert ist und Warten nichts
+  ändert, und nicht `200`, weil ein Interface, das eine Absage als Antwort
+  darstellt, sie irgendwann als Rat darstellt.
+- **Ein Budget von 0 erlaubt nichts.** Das ist die beabsichtigte Lesart
+  und der einfachste Weg, die KI-Schicht abzuschalten.
+- **Die Kosten sind eine Schätzung und heißen so.** Listenpreise in
+  `tempo/ai/pricing.py`, ein konstanter Eurokurs — einen Wechselkurs
+  abzurufen wäre ein Live-Call in genau dem Pfad, der funktionieren muss,
+  wenn Calls scheitern. Ein unbekanntes Modell wird mit dem teuersten
+  Tarif gerechnet, damit es das Budget nicht still überzieht.
+
+### Antwort-Cache
+
+- **`ai_response` (Migration `0006`) schlüsselt auf alles, was die Antwort
+  erzeugt hat**: Endpunkt, Modell, vollständiger System-Prompt und
+  Feature-Dokument. Ändert sich eine Zahl, ändert sich das Dokument;
+  ändert sich eine Regel, ändert sich der Prompt. Beides invalidiert den
+  Eintrag.
+- **Deshalb gibt es keine Ablaufzeit.** Es bleibt nichts übrig, wogegen
+  eine schützen müsste. `refresh=true` erzwingt trotzdem eine neue
+  Antwort, wenn der Athlet eine zweite Meinung will.
+- **Das Dokument wird neben der Antwort aufbewahrt.** Ohne es lässt sich
+  später nicht mehr feststellen, worauf das Modell geschaut hat, als es
+  das gesagt hat.
+
+### Kein Gesprächsverlauf im Chat
+
+- **Jede Frage wird allein aus den Kennzahlen beantwortet.** Kein
+  Verlauf heißt: das Kontextfenster bleibt beschränkt, die Kosten je Frage
+  bleiben vorhersagbar, und eine frühere Antwort kann nicht zur Eingabe
+  der nächsten werden — was die einzige Art wäre, wie eine erfundene Zahl
+  im System bliebe.
+
+### Modelle
+
+- **Aus der Config, nie hartkodiert.** `plan_week` nimmt
+  `ANTHROPIC_MODEL_PLANNING`, alles andere `ANTHROPIC_MODEL_DAILY`. Die
+  Zuordnung sagt nur, welche der beiden konfigurierten ein Task benutzt.
+- **Geliefert wird das Modell aus der Antwort**, nicht das angefragte. Die
+  Fußzeile im Interface nennt das Modell und darf keines nennen, das den
+  Text nicht geschrieben hat.

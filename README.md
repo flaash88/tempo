@@ -34,7 +34,7 @@ App.
 
 ## Stand der Entwicklung
 
-Phase 4 von 7. Fertig: Gerüst, Datenmodell, Migrationen, CLI,
+Phase 5 von 7. Fertig: Gerüst, Datenmodell, Migrationen, CLI,
 `GET /health`, die Ingestion (FIT-Parser, intervals.icu-Client mit
 Wasserstand, optionaler Garmin-Connector) und die Metrik-Engine — TRIMP,
 GAP nach Minetti, rTSS und hrTSS, Zeit in Zone, CTL/ATL/Form, ACWR,
@@ -43,7 +43,10 @@ Bestleistungen, Critical Speed, VDOT und Prognosen. Dazu die REST-API mit
 Anmeldung: jede Kennzahl in jeder Antwort trägt Konfidenz, Historie,
 Fortschritt und das Datum ihres letzten Datenpunkts, und
 `GET /api/thresholds` liefert alle Schwellen, damit die Oberfläche keine
-Zahl selbst vorhält. KI-Schicht und PWA folgen in den weiteren Phasen.
+Zahl selbst vorhält. Dazu die KI-Schicht: aus den fertigen Kennzahlen
+entsteht ein Feature-Dokument unter 4 KB, Claude formuliert daraus Text,
+die Antwort wird gespeichert und wiederverwendet. Die PWA folgt in den
+weiteren Phasen.
 
 `tempo recompute --all` zeigt den aktuellen Stand direkt an:
 
@@ -219,6 +222,46 @@ ohne Anmeldung erreichbar, alles unter `/api` nicht.
 Zugangsdaten kommen aus keiner Antwort zurück, auch nicht maskiert — die
 Einstellungen liefern nur `{"valid": true, "last4": "7f2c"}` — und lassen
 sich über die API auch nicht setzen: sie stehen in der Umgebung.
+
+## KI-Auswertung
+
+Vier Endpunkte, alle `POST` und alle hinter der Anmeldung:
+`/api/ai/daily` für die Tageseinschätzung, `/api/ai/activity/{id}` für
+eine einzelne Einheit, `/api/ai/plan-week` für die kommende Woche und
+`/api/ai/chat` für eine Rückfrage. `GET /api/ai/budget` sagt, was der
+Monat noch hergibt, ohne dafür einen Aufruf zu verbrauchen.
+
+Was das Modell zu sehen bekommt, ist eng begrenzt: aggregierte Kennzahlen
+samt ihrer Konfidenz-Metadaten, höchstens zehn zusammengefasste
+Einheiten, Wochenvolumen, Bestleistungen und der Plan — zusammen unter
+4 KB. **Rohe Sekundendaten verlassen die Datenbank nie.** Passt das
+Dokument nicht, wird in fester Reihenfolge gekürzt und die Kürzung im
+Dokument selbst vermerkt.
+
+Gerechnet wird nichts von der KI. Jede Zahl entsteht vorher deterministisch
+in `tempo/metrics/`; das Modell interpretiert fertige Werte und formuliert
+Text. Kennzahlen unter ihrer Mindesthistorie kommen als `null` mit
+Fortschritt an, und der System-Prompt verbietet ausdrücklich, sie als
+Trend oder Baseline zu lesen. Medizinische Aussagen sind ausgeschlossen;
+bei Hinweisen auf Schmerz, Verletzung oder Krankheit verweist die Antwort
+auf ärztliche Abklärung.
+
+### Kosten
+
+`TEMPO_MONTHLY_BUDGET_EUR` ist ein harter Stopp. Ist das Monatsbudget
+erreicht, antworten die Endpunkte mit `402` und dem Budgetstand — es wird
+kein Aufruf gemacht, auch kein kleinerer. Ein Budget von `0` schaltet die
+KI-Schicht ab.
+
+Jeder Aufruf wird in `ai_call` verbucht (Tokens, Cache-Tokens, geschätzte
+Kosten). Die Kosten sind eine **Schätzung** aus veröffentlichten
+Listenpreisen und einem festen Eurokurs; verbindlich ist die Abrechnung in
+der Anthropic Console.
+
+Eine identische Anfrage kostet nichts: die Antwort ist über Endpunkt,
+Modell, System-Prompt und Feature-Dokument geschlüsselt gespeichert.
+Ändert sich eine Zahl, ändert sich das Dokument — dann wird neu gefragt.
+`?refresh=true` erzwingt eine neue Antwort.
 
 ## Entwicklung
 
