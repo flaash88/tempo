@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 from sqlalchemy import inspect
 
-from tempo.cli import EXIT_NOT_IMPLEMENTED, build_parser, main
+from tempo.cli import build_parser, main
 from tempo.config import Settings
-from tempo.db.migrate import current_revision
+from tempo.db.migrate import current_revision, head_revision
 from tempo.db.session import create_db_engine
 
 
@@ -24,12 +24,12 @@ def test_init_creates_the_data_layout_and_the_schema(
 
     engine = create_db_engine(settings.database_url)
     try:
-        assert current_revision(engine) == "0001"
+        assert current_revision(engine) == head_revision()
         assert "activity" in inspect(engine).get_table_names()
     finally:
         engine.dispose()
 
-    assert "Schema-Revision:  0001" in capsys.readouterr().out
+    assert f"Schema-Revision:  {head_revision()}" in capsys.readouterr().out
 
 
 def test_init_is_repeatable(settings: Settings) -> None:
@@ -37,17 +37,26 @@ def test_init_is_repeatable(settings: Settings) -> None:
     assert main(["init"]) == 0
 
 
-@pytest.mark.parametrize(
-    "argv",
-    [["sync"], ["sync", "--full"], ["recompute", "--all"]],
-)
-def test_unbuilt_commands_report_their_phase(
+@pytest.mark.parametrize("argv", [["sync"], ["sync", "--full"]])
+def test_sync_without_credentials_says_so(
     settings: Settings, capsys: pytest.CaptureFixture[str], argv: list[str]
 ) -> None:
+    """No key configured is a setup problem, named as one."""
     exit_code = main(argv)
 
-    assert exit_code == EXIT_NOT_IMPLEMENTED
-    assert "Phase" in capsys.readouterr().err
+    assert exit_code == 1
+    assert "INTERVALS_API_KEY" in capsys.readouterr().err
+
+
+def test_recompute_on_an_empty_database_succeeds(
+    settings: Settings, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["init"]) == 0
+
+    assert main(["recompute", "--all"]) == 0
+    output = capsys.readouterr().out
+    assert "no data to recompute" in output
+    assert "Phase 3" in output
 
 
 def test_import_dir_rejects_a_path_that_is_not_a_directory(
@@ -61,13 +70,15 @@ def test_import_dir_rejects_a_path_that_is_not_a_directory(
     assert "Kein Verzeichnis" in capsys.readouterr().err
 
 
-def test_import_dir_accepts_a_directory_but_is_not_built_yet(
-    settings: Settings, tmp_path: Path
+def test_import_dir_on_an_empty_directory_succeeds(
+    settings: Settings, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    assert main(["init"]) == 0
     export = tmp_path / "garmin-export"
     export.mkdir()
 
-    assert main(["import-dir", str(export)]) == EXIT_NOT_IMPLEMENTED
+    assert main(["import-dir", str(export)]) == 0
+    assert "activities seen 0" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
@@ -76,6 +87,7 @@ def test_import_dir_accepts_a_directory_but_is_not_built_yet(
         ["init"],
         ["sync"],
         ["sync", "--full"],
+        ["sync", "--force"],
         ["recompute", "--all"],
         ["import-dir", "/tmp"],
         ["hash-password"],

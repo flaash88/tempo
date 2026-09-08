@@ -17,13 +17,13 @@ from tempo.api.auth import hash_password
 from tempo.config import Settings, get_settings
 from tempo.db.migrate import current_revision, upgrade_to_head
 from tempo.db.session import engine_for, ensure_data_dirs
+from tempo.ingest.errors import IngestError
+from tempo.ingest.garmin_optional import sync_garmin
+from tempo.ingest.sync import import_fit_directory, sync_intervals
 from tempo.logging import configure_logging
+from tempo.recompute import recompute_all
 
 log = logging.getLogger("tempo.cli")
-
-# Exit code for a command whose phase has not been implemented yet. Distinct
-# from 1 so that scripts can tell "not built" apart from "failed".
-EXIT_NOT_IMPLEMENTED = 2
 
 
 def cmd_init(args: argparse.Namespace, settings: Settings) -> int:
@@ -42,22 +42,44 @@ def cmd_init(args: argparse.Namespace, settings: Settings) -> int:
 
 
 def cmd_sync(args: argparse.Namespace, settings: Settings) -> int:
-    """Fetch activities, streams and wellness from the configured sources."""
-    print(
-        "Sync ist noch nicht implementiert — kommt in Phase 2 (Ingestion).",
-        file=sys.stderr,
-    )
-    return EXIT_NOT_IMPLEMENTED
+    """Fetch activities, their FIT files and wellness from the sources."""
+    if not settings.has_intervals_credentials:
+        print(
+            "INTERVALS_API_KEY ist nicht gesetzt — siehe .env.example.",
+            file=sys.stderr,
+        )
+        return 1
+
+    engine = engine_for(settings)
+    try:
+        report = sync_intervals(engine, settings, full=args.full, force=args.force)
+        print(f"intervals.icu: {report.status} — {report.summary()}")
+
+        if settings.garmin_direct_enabled:
+            garmin = sync_garmin(engine, settings)
+            print(f"Garmin: {garmin.status} — {garmin.summary()}")
+    except IngestError as exc:
+        print(f"Sync fehlgeschlagen: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        engine.dispose()
+
+    return 0 if report.ok else 1
 
 
 def cmd_recompute(args: argparse.Namespace, settings: Settings) -> int:
-    """Recompute the derived metrics from the stored raw data."""
+    """Rebuild the derived tables from the stored raw data."""
+    engine = engine_for(settings)
+    try:
+        report = recompute_all(engine)
+    finally:
+        engine.dispose()
+    print(report.summary())
     print(
-        "Neuberechnung ist noch nicht implementiert — kommt in Phase 3 "
-        "(Metrik-Engine).",
-        file=sys.stderr,
+        "Belastungskennzahlen (TRIMP, hrTSS, rTSS) folgen in Phase 3 — "
+        "Tage mit Einheit stehen bis dahin auf null."
     )
-    return EXIT_NOT_IMPLEMENTED
+    return 0
 
 
 def cmd_import_dir(args: argparse.Namespace, settings: Settings) -> int:
@@ -66,11 +88,14 @@ def cmd_import_dir(args: argparse.Namespace, settings: Settings) -> int:
     if not path.is_dir():
         print(f"Kein Verzeichnis: {path}", file=sys.stderr)
         return 1
-    print(
-        "Import ist noch nicht implementiert — kommt in Phase 2 (FIT-Parser).",
-        file=sys.stderr,
-    )
-    return EXIT_NOT_IMPLEMENTED
+
+    engine = engine_for(settings)
+    try:
+        report = import_fit_directory(engine, settings, path)
+    finally:
+        engine.dispose()
+    print(f"Import: {report.status} — {report.summary()}")
+    return 0 if report.ok else 1
 
 
 def cmd_hash_password(args: argparse.Namespace, settings: Settings) -> int:
@@ -110,6 +135,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--full",
         action="store_true",
         help="Vollsync statt inkrementell ab dem Wasserstand",
+    )
+    sync.add_argument(
+        "--force",
+        action="store_true",
+        help="Auch dann synchronisieren, wenn die letzte Runde unter einer "
+        "Stunde her ist",
     )
     sync.set_defaults(func=cmd_sync)
 
