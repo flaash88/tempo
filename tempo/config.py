@@ -68,6 +68,8 @@ class Settings(BaseModel):
 
     # Optional Garmin direct connector, off unless explicitly enabled.
     garmin_direct_enabled: bool = Field(default=False)
+    garmin_email: str = Field(default="")
+    garmin_password: SecretStr = Field(default=SecretStr(""))
 
     @property
     def db_path(self) -> Path:
@@ -80,6 +82,20 @@ class Settings(BaseModel):
     @property
     def database_url(self) -> str:
         return f"sqlite+pysqlite:///{self.db_path}"
+
+    @property
+    def garmin_token_dir(self) -> Path:
+        """Where the Garmin session token is kept.
+
+        Inside the data volume, so a container restart does not force
+        another login — logging in repeatedly is itself a way to get
+        rate limited.
+        """
+        return self.data_dir / "garth"
+
+    @property
+    def has_garmin_credentials(self) -> bool:
+        return bool(self.garmin_email and self.garmin_password.get_secret_value())
 
     @property
     def has_intervals_credentials(self) -> bool:
@@ -108,6 +124,8 @@ def load_settings() -> Settings:
         monthly_budget_eur=_env_float("TEMPO_MONTHLY_BUDGET_EUR", 10.0),
         password_hash=SecretStr(_env_str("TEMPO_PASSWORD_HASH")),
         garmin_direct_enabled=_env_bool("GARMIN_DIRECT_ENABLED", False),
+        garmin_email=_env_str("GARMIN_EMAIL"),
+        garmin_password=SecretStr(_env_str("GARMIN_PASSWORD")),
     )
 
 

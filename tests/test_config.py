@@ -101,6 +101,8 @@ def test_env_example_documents_every_configured_variable() -> None:
         "TEMPO_MONTHLY_BUDGET_EUR",
         "TEMPO_PASSWORD_HASH",
         "GARMIN_DIRECT_ENABLED",
+        "GARMIN_EMAIL",
+        "GARMIN_PASSWORD",
     }
 
 
