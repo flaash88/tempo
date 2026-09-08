@@ -238,6 +238,13 @@ CRITICAL_SPEED_MAX_DURATION_S: Final[int] = 1800
 
 RIEGEL_EXPONENT: Final[float] = 1.06
 
+# A race prediction rests on one best effort. Once that effort is this old
+# the prediction describes a past state of fitness, so it is delivered
+# flagged rather than as the current expectation. Longer than the general
+# staleness horizon on purpose: a personal best is a record and does not go
+# out of date in a week, but three months of no racing does make it history.
+PREDICTION_STALE_AFTER_DAYS: Final[int] = 90
+
 # Decoupling needs a long enough run with uninterrupted heart rate.
 DECOUPLING_MIN_DURATION_S: Final[int] = 1800
 
@@ -303,6 +310,7 @@ def as_dict(
             "critical_speed_min_duration_s": CRITICAL_SPEED_MIN_DURATION_S,
             "critical_speed_max_duration_s": CRITICAL_SPEED_MAX_DURATION_S,
             "riegel_exponent": RIEGEL_EXPONENT,
+            "prediction_stale_after_days": PREDICTION_STALE_AFTER_DAYS,
             "decoupling_min_duration_s": DECOUPLING_MIN_DURATION_S,
             "gap_max_grade": GAP_MAX_GRADE,
         },
