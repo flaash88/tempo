@@ -850,3 +850,76 @@ Was hier nicht steht, ist nicht entschieden.
 - **Geliefert wird das Modell aus der Antwort**, nicht das angefragte. Die
   Fußzeile im Interface nennt das Modell und darf keines nennen, das den
   Text nicht geschrieben hat.
+
+---
+
+## Phase 6 — Rückkanal zur Uhr
+
+### Der Weg führt über den Kalender
+
+- **Tempo schreibt keine Datei auf die Uhr.** Eine bestätigte Einheit wird
+  ein Kalender-Event bei intervals.icu (`POST /athlete/0/events` mit
+  `workout_doc`), und Garmin holt es von dort. Das ist der ganze Kanal:
+  ein Event je Einheit, `PUT` bei einer Änderung.
+- **Idempotent über `external_id`.** Die ID wird beim Anlegen des
+  Vorschlags vergeben, nicht beim Senden — geht die Antwort auf den ersten
+  Versuch verloren, erkennt der Kalender den zweiten trotzdem als dieselbe
+  Einheit.
+- **`remote_event_id` merkt sich, was daraus geworden ist.** Eine
+  geänderte Einheit wird per `PUT` ersetzt statt ein zweites Mal
+  angelegt. Ohne diese Spalte stünden am Mittwoch zwei Läufe.
+
+### Bestätigung
+
+- **Nichts geht ohne `confirmed_at` raus.** Ein Vorschlag ist ein
+  Vorschlag; der Kalender ist der Ort, an dem etwas verbindlich wird, und
+  über die Schwelle trägt ihn nur der Athlet.
+- **Eine Änderung zieht die Bestätigung zurück.** Zugestimmt wurde einer
+  bestimmten Einheit, nicht einem Platz in der Woche.
+- **Ein bestätigter Eintrag wird nicht stillschweigend ersetzt.** Ein Tag
+  mit bestätigter Einheit weist einen zweiten Vorschlag ab; `replace=true`
+  ist die ausdrückliche Ausnahme, und der Ersatz ist danach wieder
+  unbestätigt.
+- **Ein Eintrag der Quelle wird nie angefasst** — auch nicht mit
+  `replace=true`. Was der Athlet in einem anderen Interface geschrieben
+  hat, ist nicht Tempos, um es umzuschreiben.
+
+### Die Zustände
+
+- **Fünf statt vier.** `not_sent`, `sending`, `on_watch`, `failed` — und
+  `outdated` für den Fall, den das Design zeichnet: auf der Uhr, aber seit
+  der Übertragung geändert ("Uhr hat noch die alte Version"). Ohne diesen
+  Zustand müsste dieser Fall sich als einer der beiden anderen ausgeben,
+  und beide wären falsch.
+- **`sending` wird vor dem Request geschrieben und committet.** Ein
+  Absturz mitten in der Übertragung hinterlässt damit `sending`, und das
+  ist die Wahrheit: niemand weiß, ob das Event angekommen ist. Der nächste
+  Versuch verweigert, statt ein zweites Event zu riskieren; der nächste
+  Kalenderabgleich klärt es.
+- **`sync_error` trägt den Grund**, damit der Fehlerzustand etwas sagt.
+  Der Client redigiert Zugangsdaten, bevor er wirft — die Spalte enthält
+  nie einen Key.
+- **Synchron, nicht im Hintergrund.** Es ist ein Request, und der Athlet
+  steht davor und will wissen, ob es geklappt hat. Der Sync ist im
+  Hintergrund, weil er Minuten dauert; das hier nicht.
+
+### Der Rückweg des eigenen Events
+
+- **Eine übertragene Einheit kommt beim nächsten Sync als Event der Quelle
+  zurück.** Sie behält ihre eigene ID, ihre Herkunft `tempo` und ihre
+  Buchführung: Bestätigung und Übertragung sind Tatsachen über diese
+  Zeile, nicht über den Kalender, und ein erneutes Lesen des Kalenders
+  macht sie nicht rückgängig.
+- **Was das Lesen beisteuert, ist die Event-ID der Quelle.** Genau die
+  braucht die nächste Änderung.
+- **Das Löschen fremder Einträge bleibt auf `source = intervals`
+  beschränkt**, wie seit Phase 2 — eine Tempo-Zeile verschwindet nicht,
+  weil ein Abrufefenster sie nicht enthielt.
+
+### Was Phase 6 nicht ist
+
+- **Der Generator steht nicht hier.** Die KI formuliert Text; welche
+  Einheit tatsächlich in den Kalender geht, entscheidet der Athlet im
+  Plan-Screen und schickt sie als Vorschlag an die API. Phase 6 ist der
+  Kanal, nicht die Trainingsplanung — und das ist auch der Grund, warum
+  eine Bestätigung überhaupt eine Bedeutung hat.

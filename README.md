@@ -34,7 +34,7 @@ App.
 
 ## Stand der Entwicklung
 
-Phase 5 von 7. Fertig: Gerüst, Datenmodell, Migrationen, CLI,
+Phase 6 von 7. Fertig: Gerüst, Datenmodell, Migrationen, CLI,
 `GET /health`, die Ingestion (FIT-Parser, intervals.icu-Client mit
 Wasserstand, optionaler Garmin-Connector) und die Metrik-Engine — TRIMP,
 GAP nach Minetti, rTSS und hrTSS, Zeit in Zone, CTL/ATL/Form, ACWR,
@@ -45,8 +45,9 @@ Fortschritt und das Datum ihres letzten Datenpunkts, und
 `GET /api/thresholds` liefert alle Schwellen, damit die Oberfläche keine
 Zahl selbst vorhält. Dazu die KI-Schicht: aus den fertigen Kennzahlen
 entsteht ein Feature-Dokument unter 4 KB, Claude formuliert daraus Text,
-die Antwort wird gespeichert und wiederverwendet. Die PWA folgt in den
-weiteren Phasen.
+die Antwort wird gespeichert und wiederverwendet. Dazu der Rückkanal:
+bestätigte Einheiten gehen als Kalender-Events an intervals.icu, von wo
+Garmin sie auf die Uhr synchronisiert. Die PWA folgt in Phase 7.
 
 `tempo recompute --all` zeigt den aktuellen Stand direkt an:
 
@@ -288,6 +289,36 @@ Eine identische Anfrage kostet nichts: die Antwort ist über Endpunkt,
 Modell, System-Prompt und Feature-Dokument geschlüsselt gespeichert.
 Ändert sich eine Zahl, ändert sich das Dokument — dann wird neu gefragt.
 `?refresh=true` erzwingt eine neue Antwort.
+
+## Einheiten auf die Uhr
+
+Tempo schreibt nicht auf die Uhr, sondern in den Kalender bei
+intervals.icu — von dort holt Garmin die Einheit. Der Weg hat vier
+Schritte und je einen Endpunkt:
+
+```
+POST   /api/plan/workouts             Vorschlag anlegen  (?replace=true)
+PUT    /api/plan/workouts/{id}        Vorschlag ändern
+POST   /api/plan/workouts/{id}/confirm  bestätigen
+POST   /api/plan/workouts/{id}/push     an die Uhr senden
+```
+
+**Ohne Bestätigung geht nichts raus.** Ein Vorschlag ist ein Vorschlag;
+erst `confirm` macht ihn übertragbar, und eine Änderung danach zieht die
+Bestätigung wieder zurück. Ein Tag, an dem schon eine bestätigte Einheit
+steht, weist einen zweiten Vorschlag ab — `replace=true` ist die
+ausdrückliche Ausnahme, und der Ersatz muss neu bestätigt werden. Ein
+Eintrag, den der Athlet in intervals.icu selbst angelegt hat, wird nie
+überschrieben.
+
+Jede Einheit trägt in `GET /api/plan` und `GET /api/today` ihren
+Übertragungszustand: `not_sent`, `sending`, `on_watch`, `outdated`
+(auf der Uhr, aber seit der Übertragung geändert) oder `failed`, dazu
+Zeitstempel und Fehlergrund.
+
+Übertragen wird idempotent: die `external_id` steht schon beim Anlegen
+fest, und eine geänderte Einheit ersetzt ihr Event per `PUT`, statt ein
+zweites daneben anzulegen.
 
 ## Entwicklung
 
