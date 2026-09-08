@@ -34,13 +34,22 @@ App.
 
 ## Stand der Entwicklung
 
-Phase 2 von 7. Fertig: Gerüst, Datenmodell, Migrationen, CLI,
-`GET /health` sowie die Ingestion — FIT-Parser, intervals.icu-Client mit
-Wasserstand und der optionale Garmin-Connector. Die Belastungskennzahlen
-selbst (TRIMP, hrTSS, rTSS, CTL/ATL, Bereitschaft) kommen mit der
-Metrik-Engine in Phase 3; bis dahin steht in `daily_load` die aggregierte
-Dauer und Distanz, und die Kennzahlspalten stehen auf `null`. API,
-KI-Schicht und die PWA folgen danach. Der Phasenplan steht in
+Phase 3 von 7. Fertig: Gerüst, Datenmodell, Migrationen, CLI,
+`GET /health`, die Ingestion (FIT-Parser, intervals.icu-Client mit
+Wasserstand, optionaler Garmin-Connector) und die Metrik-Engine — TRIMP,
+GAP nach Minetti, rTSS und hrTSS, Zeit in Zone, CTL/ATL/Form, ACWR,
+Monotonie und Strain, HFV- und Ruhe-HF-Baselines, Bereitschaft,
+Bestleistungen, Critical Speed, VDOT und Prognosen. Jede Kennzahl trägt
+Konfidenz, Historie und das Datum ihres letzten Datenpunkts. REST-API,
+KI-Schicht und die PWA folgen in den weiteren Phasen.
+
+`tempo recompute --all` zeigt den aktuellen Stand direkt an:
+
+```
+Bereitschaft: noch nicht verfügbar (0/14, frühestens 22.09.2026) — letzter Wert 16.05.2026
+Formkurve: noch nicht verfügbar (0/42, frühestens 20.10.2026) — letzter Wert 16.05.2026
+Critical Speed: Stand 15.01.2026 — 5:59 min/km, D' 0 m
+``` Der Phasenplan steht in
 [`docs/PLAN.md`](docs/PLAN.md), getroffene Architekturentscheidungen in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
@@ -114,6 +123,13 @@ curl -s localhost:8000/health
 docker compose exec tempo tempo sync --full     # gesamte Historie
 docker compose exec tempo tempo recompute --all
 ```
+
+`recompute` rechnet die Kennzahlen aus dem, was in der Datenbank steht —
+kein erneuter Import nötig. Damit TRIMP und hrTSS entstehen können,
+brauchen es HFmax, Ruhe-HF und Schwellen-HF in `athlete_settings`, für
+rTSS zusätzlich die Schwellenpace. Fehlt eines davon, sagt der Befehl
+welches, und die betroffene Spalte bleibt `null` statt auf null gesetzt zu
+werden.
 
 Der Sync spiegelt zusätzlich den Kalender von intervals.icu nach
 `planned_workout` — geplante Einheiten, Wettkämpfe und Notizen. Was dort

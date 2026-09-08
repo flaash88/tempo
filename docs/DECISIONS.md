@@ -340,3 +340,159 @@ Was hier nicht steht, ist nicht entschieden.
   für die Baseline ein Bruch.
 - **Der Einheitenname im Spaltennamen weicht hier bewusst.** Ohne die
   Metrik ist die Einheit nicht bekannt; `hrv_ms` wäre eine Behauptung.
+
+---
+
+## Phase 3 — Metrik-Engine
+
+### Reihenfolge und Zuschnitt
+
+- **`confidence.py` kommt vor allem anderen**, weil jedes andere Modul es
+  benutzt. Es ist die einzige Implementierung der Regeln aus `CLAUDE.md`
+  und fasst nichts an außer Sequenzen von Datumswerten und Zahlen — die
+  Datenbank kommt darin nicht vor.
+- **`tempo/metrics/` bleibt rein.** Datenbankzugriff liegt in
+  `tempo/recompute.py` (Schreiben) und `tempo/snapshot.py` (Lesen). Nur so
+  bleibt `mypy --strict` über die Engine sinnvoll und jede Formel einzeln
+  gegen handgerechnete Eingaben testbar.
+- **`tempo/snapshot.py` ist neu und ist das Lesemodell.** Die Pflichttests
+  fragen nach dem, was der Athlet zu sehen bekäme („Bereitschaft null mit
+  Fortschritt"), und das entsteht erst beim Zusammensetzen. Phase 4 legt
+  ihre Endpunkte darüber, statt die Logik dort zu wiederholen.
+
+### Das aktuelle Fenster — die zentrale Auslegungsentscheidung
+
+- **Ein Fenster ist die ununterbrochene Reihe von Datentagen, die bis heute
+  reicht.** Nicht „alle Historie, die es gibt". Eine Lücke von über 14
+  Tagen beendet es, und ein Fenster, dessen jüngster Tag selbst so weit
+  zurückliegt, ist ebenfalls zu Ende. Ein Block von 16 getragenen Tagen aus
+  dem Mai ist Historie, kein Fenster, und kann keinen aktuellen Wert
+  liefern — genau das verlangt die Reset-Regel.
+- **Für die Formkurve zählt der Tag als Datentag, an dem Wellness *oder*
+  eine Einheit vorliegt.** Das ist die Unterscheidung zwischen „der Athlet
+  hat eine Woche pausiert" und „die Uhr lag drei Monate in der Schublade":
+  ein Ruhetag mit Wellness-Daten ist eine Information, Last 0 an ihm ist
+  eine Tatsache, und nur ein Tag ganz ohne Daten bricht das Fenster. Ohne
+  diese Regel würde entweder ein Taper die Formkurve wegwerfen oder ein
+  untracked Quartal eine liefern. Der Plan sagt dazu nichts; das hier ist
+  die Auslegung, und sie steht in einer Funktion (`tracked_window`).
+- **Konfidenz fällt linear auf null über dieselben 14 Tage**, an denen die
+  Reset-Regel die Baseline verwirft. Damit gibt es keine zweite erfundene
+  Zahl für denselben Gedanken.
+- **`stale` ist bei fehlenden Daten `False`.** Es gibt nichts, was veraltet
+  sein könnte; das ist der Leerzustand, und den sagt `have == 0`.
+- **`fitness_day` trägt die Konfidenz *des jeweiligen Tages*, nicht die von
+  heute.** Eine Zeile von vor sechs Monaten beschreibt, was damals bekannt
+  war. `window_lengths_by_day` rechnet das in einem Durchgang statt
+  quadratisch.
+
+### Zwei Mindesthistorien für dieselbe Arithmetik
+
+- **Bereitschaft vergleicht gegen eine Baseline über ihr eigenes
+  14-Nächte-Fenster; die veröffentlichte HFV-Baseline behält 21 Tage.**
+  Ohne diese Trennung wäre die im Plan genannte Mindesthistorie für
+  Bereitschaft unerreichbar: jede ihrer vier Eingaben hätte auf ein
+  längeres Fenster gewartet als sie selbst. Es sind zwei Produkte derselben
+  Rechnung — „wie steht heute zur jüngeren Norm" ist mit 14 Nächten
+  beantwortbar, eine Trendlinie mit Streuband braucht mehr Punkte, bevor
+  das Band etwas bedeutet. Ein Test hält beide Zustände gleichzeitig fest.
+
+### Keine Interpretation der HFV-Metrik
+
+- **`wellness.py` sagt nirgends, welches Maß der HFV-Wert ist.** Der
+  Feldname der Quelle reist mit jedem Messwert; das Einzige, was das Modul
+  damit tut, ist sich zu weigern, zwei davon zu mischen. Ein Wechsel des
+  Feldnamens beendet das Fenster wie eine Datenlücke, weil eine Baseline
+  aus zwei verschiedenen Größen eine Mischung aus zwei Größen wäre.
+- **Die ln-Transformation ist Arithmetik, keine Aussage.** Sie steht auf der
+  Baseline vermerkt (`log_transformed`), damit jeder spätere Vergleich im
+  selben Raum passiert; getestet ist, dass eine Verdoppelung aller Werte
+  dieselbe Streuung ergibt, die Skala also herausfällt.
+- **Die Ruhe-HF-Baseline wird nicht ln-transformiert.** Gleitendes Mittel
+  und Band übertragen sich, die Transformation nicht.
+
+### Formeln und ihre Konstanten
+
+- **Alle Koeffizienten stehen in `thresholds.py`**, auch die
+  Minetti-Polynomkoeffizienten, die Edwards-Zonengewichte und die
+  Bereitschaftsgewichte. `as_dict()` liefert sie ans Frontend.
+- **Friels Laufmodell ist der Default**, %HRmax der Rückfall. Ohne
+  Schwellen-HF und ohne HFmax gibt es keine Zonen; aus dem Alter wird
+  nichts geschätzt.
+- **Pace-Zonen werden als Geschwindigkeiten gehalten, nicht als Paces.**
+  Schneller ist eine höhere Zone, und Geschwindigkeit steigt mit der
+  Belastung wie die Herzfrequenz — beides gleich zu halten nimmt eine
+  ganze Klasse vertauschter Vergleiche aus dem Weg.
+- **Unter Zone 1 wird getrennt gezählt**, nicht als Zone 1. Beim
+  %HRmax-Modell ist das der Ruhebereich, und ihn als leichtes Training zu
+  zählen würde jede darauf gebaute Lastzahl aufblähen. Unbekannte Sekunden
+  werden ebenfalls getrennt geführt: gemessen-aber-leicht und nie-gemessen
+  sind zwei verschiedene Dinge.
+- **Ein Gradient über ±30 % wird verworfen, nicht gekappt**, und die
+  Sekunde geht mit ihrer Rohgeschwindigkeit ein — das ist der Flachfall.
+  Ein barometrischer Ausreißer darf kein erfundener Hügel werden.
+- **Ein gleitendes Fenster, das eine unaufgezeichnete Sekunde überlappt,
+  wird übersprungen, nicht verkürzt.** Genau das ist der Unterschied
+  zwischen einer Pause und einem langsamen Abschnitt.
+- **NGP ist das gleitende 30-Sekunden-Mittel der steigungskorrigierten
+  Geschwindigkeit, dann deren Mittel vierter Potenz.** Die 30 Sekunden sind
+  Coggans Definition; die Zahl steht als benannte Konstante.
+- **CTL/ATL/TSB laufen über *jeden* Kalendertag**, Tage ohne Einheit mit
+  Last 0. Gerechnet wird überall, ausgeliefert wird selektiv — eine Kurve
+  über ein untracked Quartal ist Arithmetik, keine Information.
+- **TSB ist die Bilanz von gestern**, wie der Plan es schreibt: die
+  heutige Einheit ist noch nicht verarbeitet, wenn der Athlet morgens
+  entscheidet.
+- **Monotonie verwendet die Populationsstandardabweichung.** Die Woche ist
+  die ganze Population, keine Stichprobe einer längeren. Eine Woche ohne
+  Streuung hat keine Monotonie — das Verhältnis wäre unendlich.
+- **Die Formkurve wird aus rTSS gebaut, sonst aus hrTSS.** Beide sind auf
+  „eine Stunde an der Schwelle = 100" normiert und damit in einer Reihe
+  austauschbar. Rohes TRIMP ist es nicht: es hat seine eigene Skala, und
+  Skalen zu mischen würde jedes Mal eine Stufe in die Kurve setzen, wenn
+  der Brustgurt vergessen wurde.
+- **Riegel und VDOT werden beide ausgewiesen und nie gemittelt.** Wo sie
+  auseinandergehen, ist die Differenz die Information.
+- **Die VDOT-Umkehrung bisektiert über die Geschwindigkeit, nicht über die
+  Dauer.** Die Sauerstoffkostenrelation wird unter etwa 25 m/min negativ;
+  ein Dauerintervall, das für einen Marathon weit genug ist, läuft für
+  einen 5000er aus dem Modell heraus. Gegen Daniels' Tabelle geprüft:
+  VDOT 50 ist 5000 m in 19:57, 10 000 m in etwa 41:21, Marathon in etwa
+  3:10:49.
+- **Critical Speed wird nur aus Läufen gefittet.** Eine kritische
+  *Lauf*geschwindigkeit aus einer Radfahrt ist keine leicht falsche Zahl,
+  sondern eine andere Größe — und in der echten Historie dieses Athleten
+  sind die Radfahrten das Schnellste auf der Platte. Der Rauchtest gegen
+  die echte Datenlage hat genau das aufgedeckt.
+- **Critical Speed wird auch veraltet ausgeliefert.** Eine Bestleistung ist
+  ein Rekord, kein aktueller Zustand: sie kommt mit `stale` und dem Datum,
+  wie `CLAUDE.md` es für veraltete Werte vorschreibt, während
+  Bereitschaft und Formkurve als Zustandsgrößen zurückgehalten werden.
+
+### Was `None` bedeutet, nochmal
+
+- **Ein Tag ohne Einheit trägt Last 0**, ein Tag *mit* Einheit ohne
+  ableitbare Last trägt `None`. Ein Lauf ohne HF hat kein TRIMP und kein
+  hrTSS, kann aber rTSS haben; ohne konfigurierte Schwellenpace ist es
+  umgekehrt; ohne beides bleiben Dauer und Distanz, und mehr wird nicht
+  behauptet.
+- **Ein Tag mit zwei Einheiten, von denen nur eine bewertbar ist, meldet
+  die eine**, die er hat. Ein Tag, an dem keine bewertbar war, bleibt
+  unbekannt statt null.
+
+### Bereitschaftsgewichte
+
+- **HFV 0,40 · Ruhe-HF 0,20 · Schlaf 0,20 · Form 0,20**, als benannte
+  Konstanten an einer Stelle. Die Gewichte der *vorhandenen* Eingaben
+  werden renormiert, statt den Wert von etwas herunterziehen zu lassen, das
+  niemand gemessen hat. Unter zwei Eingaben gibt es keinen Wert: eine
+  einzelne Zahl würde mehr über das Fehlende sagen als über den Athleten.
+  Die Gewichte selbst sind eine Wahl, nicht eine Ableitung — sie gehören
+  ins Review.
+
+### Recompute
+
+- **`recompute --all` ist idempotent und füllt die Lastspalten
+  nachträglich.** Es liest die Streams aus der Datenbank; eine Einheit, die
+  vor dem Anlegen der Athletenwerte importiert wurde, wird beim nächsten
+  Lauf bewertet, ohne Neuimport. Ein Test hält beides fest.
