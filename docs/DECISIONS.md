@@ -134,3 +134,172 @@ Was hier nicht steht, ist nicht entschieden.
 - **`apscheduler` und `fitdecode` sind schon jetzt Abhängigkeiten,
   obwohl noch nichts sie importiert.** Sie stehen im vereinbarten Stack;
   ein festgeschriebener Lockfile jetzt erspart die Diskussion in Phase 2.
+
+---
+
+## Phase 2 — Ingestion
+
+### Aus dem Review übernommen
+
+- **Der Wasserstand bekommt eine eigene Tabelle `sync_state`**
+  (`source` PK, `last_activity_start`, `last_wellness_date`,
+  `last_success_at`, `cursor`). `sync_log` bleibt reines Audit-Log und
+  wird für das Fortsetzen nie gelesen.
+- **Aktivitäten und Wellness haben getrennte Marken**, weil beide
+  unabhängig voneinander abbrechen können. Ein Fehler bei den
+  Aktivitäten darf den Fortschritt bei Wellness nicht verwerfen.
+- **Eine Marke wandert erst nach vollständiger und committeter
+  Verarbeitung weiter.** Aktivitäten werden dafür von alt nach neu
+  abgearbeitet; ein Abbruch lässt die Marke bei der letzten Einheit
+  stehen, die ganz durchgelaufen ist, nie bei einer späteren.
+- **CI baut das Image** (`docker build`, ohne Push) und prüft es mit
+  `tempo --version` und einem Import der App.
+- **`tempo hash-password` steht in der Installationsanleitung**, samt
+  Hinweis, dass `TEMPO_PASSWORD_HASH` nicht von Hand geschrieben wird.
+
+### Wasserstand — die Ausnahmen von der Regel
+
+- **Eine Einheit ohne FIT-Datei auf dem Server blockiert die Marke
+  nicht.** Eine manuell auf intervals.icu eingetragene Einheit hat keine
+  Aufzeichnung; das ist ein normaler Zustand und wird gezählt, nicht als
+  Fehler behandelt. Sonst würde eine einzige solche Einheit jeden
+  künftigen Sync für immer an derselben Stelle festhalten.
+- **Eine unlesbare FIT-Datei wird nach `<name>.fit.invalid` beiseite
+  gelegt** und die Marke wandert weiter. Ein erneuter Download derselben
+  kaputten Datei hilft nicht, aber die verschobene Datei bleibt zur
+  Ansicht liegen und der nächste Lauf holt sie neu.
+- **Auth-Fehler und Rate Limiting brechen den Lauf sofort ab.** Danach
+  wird nichts mehr gelingen, und die Marke bleibt, wo sie war.
+- **Ein fehlgeschlagener Lauf setzt `last_success_at` nicht**, ein
+  teilweise erfolgreicher schon. Die Stundensperre gilt also nach einem
+  Teilerfolg — der Wasserstand sorgt dafür, dass der nächste Lauf genau
+  dort weitermacht.
+- **Überlappung von 7 Tagen** hinter der Marke. Nachträglich eingetragene
+  Wellness-Tage und korrigierte Aktivitäten kommen so noch mit; jeder
+  Schreibvorgang ist idempotent, die Überlappung kostet also nur eine
+  Anfrage.
+- **Die Wellness-Marke steht auf dem Ende des verarbeiteten Fensters,
+  nicht auf dem letzten Tag mit Daten.** Sonst würde bei einer langen
+  Datenlücke jeder Lauf wieder das ganze Jahr abfragen.
+
+### FIT-Parser
+
+- **Streams werden auf ein dichtes 1-Hz-Raster gelegt.** Eine Sekunde
+  ohne Aufzeichnung wird als Zeile mit ausschließlich `None` gespeichert.
+  Eine Pause ist damit sichtbar ein Loch und keine Linie, die darüber
+  gezogen wurde — und die Fensterlogik in Phase 3 kann eine halbstündige
+  Pause nicht versehentlich als durchgehende Belastung lesen.
+- **Ein HF-Aussetzer ist keine Lücke.** Fehlt nur ein Kanal, bleiben die
+  Nachbarkanäle stehen; `is_empty` unterscheidet die beiden Fälle.
+- **Mehrere Records in derselben Sekunde: der erste gewinnt.** Ein
+  Mittelwert wäre ein Wert, der nie gemessen wurde.
+- **Zusammenfassungswerte kommen aus der Session-Message der Datei.** Nur
+  wenn die Message ganz fehlt, werden Mittel- und Maximal-HF aus den
+  Samples abgeleitet, und `derived_summary` sagt das. Eine Session, die
+  ausdrücklich keine HF nennt, wird nicht aus den Records „korrigiert".
+- **Die Ortszeit kommt aus der Activity-Message** (Differenz zwischen
+  `local_timestamp` und `timestamp`). Fehlt sie, gilt UTC als Ortszeit
+  und `local_time_assumed` markiert das.
+- **`MAX_ACTIVITY_SPAN_S` (48 h) ist eine Parser-Schranke, keine
+  Kennzahlschwelle**, und steht deshalb nicht in `thresholds.py`. Sie
+  verhindert, dass ein kaputter Zeitstempel Millionen Stream-Zeilen
+  erzeugt.
+- **Die ID einer Einheit, die nur als Datei existiert, ist
+  `fit-<sha256[:16]>` über den Dateiinhalt.** Derselbe Export ein zweites
+  Mal eingelesen aktualisiert dieselbe Zeile.
+- **`import-dir` kopiert die Dateien ins Datenvolumen**, weil
+  `activity.fit_path` auch nach dem Löschen des Export-Ordners noch
+  stimmen muss. Eine Einheit, die intervals.icu für dieselbe Startzeit
+  und Sportart schon geliefert hat, wird übersprungen statt ein zweites
+  Mal unter anderer ID angelegt.
+
+### Tests des Parsers
+
+- **Keine echte FIT-Datei im Repo, auch keine kleine.** `*.fit` ist
+  gitignored und bleibt es, also erzeugen die Tests ihre Eingabe selbst:
+  `tests/fixtures/fit_writer.py` ist ein minimaler FIT-Encoder (Header,
+  Definition- und Data-Messages, beide CRCs). Der Umweg ist die
+  Alternative dazu, Gesundheitsdaten einzuchecken.
+
+### intervals.icu-Client
+
+- **Basic Auth mit dem wörtlichen Benutzernamen `API_KEY`.** Ein Bearer
+  Token wird mit 403 abgelehnt, deshalb gibt es diese Option nicht; die
+  403-Meldung nennt die Ursache.
+- **Anfragen laufen sequenziell.** Die Historie eines einzelnen Nutzers
+  ist klein, und parallele Last auf einer kostenlosen API ist der Weg zu
+  einer Sperre.
+- **Bei 429 zählt `Retry-After` des Servers**, sonst exponentielles
+  Backoff mit Deckel. 5xx und abgebrochene Verbindungen werden wiederholt,
+  4xx nicht — die kommen beim zweiten Versuch genauso zurück.
+- **`avg_pace_s_per_km` wird aus Distanz und Bewegungszeit gerechnet**,
+  nicht aus dem `pace`-Feld der Antwort, dessen Einheit nicht belastbar
+  dokumentiert ist.
+- **`hrv` von intervals.icu ist rMSSD** und landet in `hrv_rmssd`.
+  `hrvSDNN` ist ein anderes Maß und wird nicht in dieselbe Spalte
+  gemischt.
+- **Leere Wellness-Tage werden nicht gespeichert.** Die API antwortet auf
+  einen Zeitraum mit einer Zeile pro Tag, die meisten davon ohne Werte;
+  sie zu schreiben würde „nicht gemessen" in einen Messwert verwandeln.
+- **Eine unbrauchbare Nutzlast lässt den Sync nicht scheitern.** Fehlt
+  ID oder Startzeit, wird der Eintrag übersprungen, der Grund landet in
+  `sync_log`, und der Lauf endet als `partial`.
+- **Streams kommen aus der FIT-Datei, nicht aus `/streams`.** Die
+  FIT-Datei ist die Aufzeichnung; die Client-Methode für `/streams`
+  existiert für den Fall, dass auf dem Server keine FIT-Datei liegt, und
+  ist nicht in die Pipeline verdrahtet.
+- **`GET /athlete/0/events` ist implementiert, wird aber nicht
+  gespeichert.** Für geplante Einheiten gibt es noch keine Tabelle; sie
+  anzulegen ist eine Entscheidung der Phase, die den Plan-Screen baut.
+
+### Garmin-Direktconnector
+
+- **`garminconnect` ist ein optionales Extra, keine Abhängigkeit.** Ist
+  der Connector aus, importiert niemand die Bibliothek; ist er an und sie
+  fehlt, sagt das Modul das und schaltet sich ab wie bei jeder anderen
+  Abweisung.
+- **`wellness_day` bekommt `body_battery` und `training_readiness`.** Der
+  Tabellenplan aus Phase 1 hatte für die beiden Werte, die nur dieser
+  Connector liefert, keine Spalten — ohne sie wäre der Connector sinnlos.
+- **Höchstens ein Versuch pro Tag**, über die `garmin`-Zeile in
+  `sync_state`. Bei 401, 403 oder 429 schaltet sich das Modul ab und
+  schreibt den Grund nach `sync_log`; es gibt hier bewusst keine
+  Retry-Schleife, weil wiederholte Fehlversuche zu Sperren auf
+  Account-Ebene führen.
+- **Erkannt wird eine Abweisung am Statuscode und am Klassennamen.** Die
+  Fehlerklassen der Bibliothek tragen nicht immer einen Status.
+- **Als Body Battery des Tages gilt der Tageshöchstwert.** Garmin liefert
+  eine Reihe über den Tag; der Höchstwert liegt nach dem Schlaf, und das
+  ist die Erholungsaussage, um die es geht.
+- **Ein bestehender Wellness-Tag behält seine `source`.** Dass Garmin ein
+  Feld ergänzt, macht den Tag nicht zu Garmins Tag.
+- **Der Connector ist „aus" ohne Zeile in `sync_log`.** Ein stündliches
+  „immer noch aus" wäre Rauschen, kein Audit-Trail.
+
+### Recompute
+
+- **`recompute --all` legt den Tageskalender an**: für jeden Tag vom
+  ersten Datenpunkt bis heute eine Zeile in `daily_load`, kein Tag
+  übersprungen. Tage ohne Einheit stehen ausdrücklich auf Last 0, damit
+  CTL und ATL abklingen statt über eine Lücke hinweg festzuhängen.
+- **Nur die Aggregation liegt hier, nicht die Formeln.** Dauer und
+  Distanz der Einheiten eines Tages werden summiert; TRIMP, hrTSS und
+  rTSS bleiben an Tagen mit Einheit `null`, weil „noch nicht gerechnet"
+  eine andere Aussage ist als „keine Belastung". Die Formeln kommen mit
+  der Metrik-Engine in Phase 3.
+- **Der Kalender endet bei heute**, auch wenn der letzte Datenpunkt
+  Monate alt ist — das ist der Normalfall dieser App, und genau daran
+  klingt die Formkurve korrekt ab.
+
+### Sonstiges
+
+- **Eine Sportart-Vokabular an einer Stelle** (`tempo/ingest/sports.py`).
+  intervals.icu sagt `Run`, FIT sagt `running`; beide werden beim Import
+  normalisiert, damit kein Verbraucher zwei Schreibweisen kennen muss.
+  Unbekanntes wird `Other` und nicht in eine Kategorie gezwungen.
+- **Die Kopfrevision kommt aus dem Migrationsverzeichnis**
+  (`head_revision()`), damit eine neue Revision nicht an einer zweiten
+  Stelle nachgetragen werden muss.
+- **FIT-Downloads werden atomar geschrieben** (`.part`, dann `rename`).
+  Ein abgebrochener Download kann so nie als vollständige Datei
+  missverstanden werden.

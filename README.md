@@ -34,9 +34,13 @@ App.
 
 ## Stand der Entwicklung
 
-Phase 1 von 7: Gerüst, Datenmodell, Migrationen, CLI und
-`GET /health`. Ingestion, Metrik-Engine, API, KI-Schicht und die PWA
-folgen in den weiteren Phasen. Der Phasenplan steht in
+Phase 2 von 7. Fertig: Gerüst, Datenmodell, Migrationen, CLI,
+`GET /health` sowie die Ingestion — FIT-Parser, intervals.icu-Client mit
+Wasserstand und der optionale Garmin-Connector. Die Belastungskennzahlen
+selbst (TRIMP, hrTSS, rTSS, CTL/ATL, Bereitschaft) kommen mit der
+Metrik-Engine in Phase 3; bis dahin steht in `daily_load` die aggregierte
+Dauer und Distanz, und die Kennzahlspalten stehen auf `null`. API,
+KI-Schicht und die PWA folgen danach. Der Phasenplan steht in
 [`docs/PLAN.md`](docs/PLAN.md), getroffene Architekturentscheidungen in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
@@ -85,19 +89,57 @@ sudo chown -R 1000:1000 data
 | `TEMPO_MONTHLY_BUDGET_EUR` | Monatsbudget, harter Stopp bei Erreichen |
 | `TEMPO_PASSWORD_HASH` | Passwort-Hash für die Anmeldung, siehe unten |
 | `GARMIN_DIRECT_ENABLED` | Optionaler Garmin-Direktzugriff, Default `false` |
+| `GARMIN_EMAIL`, `GARMIN_PASSWORD` | Nur nötig, wenn der Garmin-Zugriff an ist |
 
-Passwort-Hash erzeugen und in `.env` eintragen:
+`TEMPO_PASSWORD_HASH` wird nicht von Hand geschrieben, sondern mit
+`tempo hash-password` erzeugt. Der Befehl fragt das Passwort zweimal ab,
+gibt die fertige Zeile aus und schreibt das Passwort nirgends hin:
 
 ```bash
 docker compose run --rm tempo tempo hash-password
+# Ausgabe: TEMPO_PASSWORD_HASH=scrypt$65536$8$1$… → nach .env kopieren
 ```
 
-Starten:
+Starten und Schema anlegen:
 
 ```bash
 docker compose up -d
 docker compose exec tempo tempo init      # Migrationen anwenden
 curl -s localhost:8000/health
+```
+
+### Erste Daten holen
+
+```bash
+docker compose exec tempo tempo sync --full     # gesamte Historie
+docker compose exec tempo tempo recompute --all
+```
+
+Danach genügt der inkrementelle Sync; er fragt jede Quelle höchstens
+stündlich ab und setzt an dem gespeicherten Wasserstand an:
+
+```bash
+docker compose exec tempo tempo sync
+```
+
+Eine Garmin-GDPR-Ausfuhr lässt sich zusätzlich einlesen. Die FIT-Dateien
+werden ins Datenvolumen kopiert, Einheiten die intervals.icu schon
+geliefert hat werden nicht doppelt angelegt:
+
+```bash
+docker compose exec tempo tempo import-dir /pfad/zur/ausfuhr
+```
+
+### Garmin-Direktzugriff (optional)
+
+Aus, und die App ist ohne ihn vollständig. Er liefert ausschließlich Body
+Battery und Training Readiness, die intervals.icu nicht führt. Der Zugriff
+läuft höchstens einmal pro Tag und schaltet sich bei 401, 403 oder 429
+selbst ab, weil wiederholte Fehlversuche zu Sperren auf Account-Ebene
+führen. Die Bibliothek dafür ist ein optionales Extra:
+
+```bash
+uv sync --extra garmin        # bzw. im Image mitbauen
 ```
 
 Die Datenbank und die rohen FIT-Dateien liegen im Volume unter
@@ -147,6 +189,9 @@ sich nicht darauf.
 ```bash
 uv sync
 uv run --env-file .env tempo init
+uv run --env-file .env tempo hash-password
+uv run --env-file .env tempo sync --full
+uv run --env-file .env tempo recompute --all
 uv run --env-file .env uvicorn tempo.api.app:app --reload
 
 uv run ruff check .
