@@ -91,7 +91,8 @@ def make_wellness_block(
         WellnessDay(
             date=start + dt.timedelta(days=offset),
             resting_hr=52 + (offset % 3),
-            hrv_rmssd=44.0 + (offset % 5) if with_hrv else None,
+            hrv=44.0 + (offset % 5) if with_hrv else None,
+            hrv_source_field="hrv" if with_hrv else None,
             sleep_secs=25_200,
             sleep_score=72,
             vo2max=None,

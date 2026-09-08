@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import datetime as dt
 from enum import StrEnum
+from typing import Any
 
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     Date,
     DateTime,
@@ -21,6 +23,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -153,7 +156,13 @@ class WellnessDay(Base):
 
     date: Mapped[dt.date] = mapped_column(Date, primary_key=True)
     resting_hr: Mapped[int | None] = mapped_column(Integer)
-    hrv_rmssd: Mapped[float | None] = mapped_column(Float)
+    # Heart rate variability, deliberately not named after a metric. Which
+    # measure this is depends on the source, so the source's own field name
+    # travels with the value in hrv_source_field and nothing downstream has
+    # to assume it is rMSSD. A change of that field breaks the baseline:
+    # comparing one measure against another would be meaningless.
+    hrv: Mapped[float | None] = mapped_column(Float)
+    hrv_source_field: Mapped[str | None] = mapped_column(String(32))
     sleep_secs: Mapped[int | None] = mapped_column(Integer)
     sleep_score: Mapped[int | None] = mapped_column(Integer)
     vo2max: Mapped[float | None] = mapped_column(Float)
@@ -250,6 +259,45 @@ class AiCall(Base):
     cost_eur: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
 
     __table_args__ = (Index("ix_ai_call_ts", "ts"),)
+
+
+class PlannedWorkout(Base):
+    """A planned session, as the source's calendar has it.
+
+    Mirrors what ``GET /athlete/0/events`` returns, including entries whose
+    ``category`` is not a workout at all — that is what the column is for.
+    Carries no sync status: pushing sessions back to the watch is phase 6,
+    and its bookkeeping belongs to that phase.
+    """
+
+    __tablename__ = "planned_workout"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    date: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    category: Mapped[str | None] = mapped_column(String(32))
+    sport: Mapped[str | None] = mapped_column(String(32))
+    name: Mapped[str | None] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text)
+    target_time_s: Mapped[int | None] = mapped_column(Integer)
+    target_dist_m: Mapped[float | None] = mapped_column(Float)
+    target_load: Mapped[float | None] = mapped_column(Float)
+    # The structured workout as the source describes it, stored verbatim.
+    workout_doc: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    # The idempotency key. Nullable, because an entry created in the
+    # source's own interface has none; SQLite allows repeated NULLs in a
+    # unique column, which is exactly what that case needs.
+    external_id: Mapped[str | None] = mapped_column(String(64))
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+    source: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=DataSource.INTERVALS
+    )
+
+    __table_args__ = (
+        UniqueConstraint("external_id", name="uq_planned_workout_external_id"),
+        Index("ix_planned_workout_date", "date"),
+    )
 
 
 class SyncState(Base):

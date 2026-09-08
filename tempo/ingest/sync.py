@@ -51,6 +51,11 @@ INCREMENTAL_OVERLAP_DAYS: Final = 7
 # A full sync asks from before any consumer GPS watch existed.
 FULL_SYNC_OLDEST: Final = dt.date(2000, 1, 1)
 
+# How far ahead to read the calendar. A quarter covers a full training
+# block without dragging in years of an empty calendar. Operational, not a
+# metric threshold, so it lives here rather than in thresholds.py.
+EVENT_HORIZON_DAYS: Final = 90
+
 ClientFactory = Callable[[Settings], IntervalsClient]
 
 
@@ -66,6 +71,8 @@ class SyncReport:
     stream_samples: int = 0
     activities_without_fit: int = 0
     wellness_days: int = 0
+    planned_workouts: int = 0
+    planned_workouts_removed: int = 0
     notes: list[str] = field(default_factory=list)
 
     @property
@@ -80,6 +87,8 @@ class SyncReport:
             f"stream samples {self.stream_samples}",
             f"without fit {self.activities_without_fit}",
             f"wellness days {self.wellness_days}",
+            f"planned workouts {self.planned_workouts}",
+            f"removed {self.planned_workouts_removed}",
         ]
         if self.notes:
             parts.append(f"notes: {'; '.join(self.notes[:10])}")
@@ -164,6 +173,7 @@ def sync_intervals(
                 engine, settings, client, report, activity_mark, today, full=full
             )
             _sync_wellness(engine, client, report, wellness_mark, today, full=full)
+            _sync_events(engine, client, report, activity_mark, today, full=full)
     except (IntervalsAuthError, RateLimited) as exc:
         report.status = SyncStatus.FAILED
         report.notes.append(str(exc))
@@ -301,6 +311,43 @@ def _sync_wellness(
         previous = state.last_wellness_date
         if previous is None or newest > previous:
             state.last_wellness_date = newest
+
+
+def _sync_events(
+    engine: Engine,
+    client: IntervalsClient,
+    report: SyncReport,
+    watermark: dt.datetime | None,
+    today: dt.date,
+    *,
+    full: bool,
+) -> None:
+    """Mirror the source's calendar into ``planned_workout``.
+
+    No watermark of its own: a plan lives in the future, so the window
+    always reaches forward and is re-read whole every run. That is one
+    request, every write is idempotent over ``external_id``, and it is the
+    only way a session deleted at the source can disappear here too.
+    """
+    oldest, _ = _activity_window(watermark, today, full=full)
+    newest = today + dt.timedelta(days=EVENT_HORIZON_DAYS)
+
+    try:
+        entries, skipped = client.events_from(client.list_events(oldest, newest))
+    except IntervalsApiError as exc:
+        # The calendar is not worth failing activities and wellness over.
+        report.notes.append(f"events: {exc}")
+        return
+
+    report.notes.extend(skipped)
+    with session_scope(engine) as session:
+        report.planned_workouts = store.upsert_planned_workouts(session, entries)
+        report.planned_workouts_removed = store.drop_planned_workouts_absent_from(
+            session,
+            oldest=oldest,
+            newest=newest,
+            keep_ids={entry.id for entry in entries},
+        )
 
 
 def import_fit_directory(

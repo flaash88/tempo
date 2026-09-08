@@ -20,6 +20,7 @@ EXPECTED_TABLES = {
     "ai_call",
     "sync_log",
     "sync_state",
+    "planned_workout",
 }
 
 

@@ -8,7 +8,7 @@ twice updates one row rather than creating a second.
 from __future__ import annotations
 
 import datetime as dt
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 
 from sqlalchemy import delete, insert, select
 from sqlalchemy.orm import Session
@@ -18,6 +18,7 @@ from tempo.db.models import (
     ActivityStream,
     DataSource,
     Lap,
+    PlannedWorkout,
     SyncLog,
     SyncState,
     SyncStatus,
@@ -25,7 +26,11 @@ from tempo.db.models import (
     utcnow,
 )
 from tempo.ingest.fit_parser import ParsedActivity
-from tempo.ingest.intervals_client import ActivitySummary, WellnessValues
+from tempo.ingest.intervals_client import (
+    ActivitySummary,
+    PlannedWorkoutValues,
+    WellnessValues,
+)
 
 
 def get_or_create_state(session: Session, source: str) -> SyncState:
@@ -170,7 +175,8 @@ def upsert_wellness(
             day = WellnessDay(date=entry.date)
             session.add(day)
         day.resting_hr = entry.resting_hr
-        day.hrv_rmssd = entry.hrv_rmssd
+        day.hrv = entry.hrv
+        day.hrv_source_field = entry.hrv_source_field
         day.sleep_secs = entry.sleep_secs
         day.sleep_score = entry.sleep_score
         day.vo2max = entry.vo2max
@@ -178,6 +184,81 @@ def upsert_wellness(
         day.source = source
         stored += 1
     return stored
+
+
+def upsert_planned_workouts(
+    session: Session,
+    entries: Sequence[PlannedWorkoutValues],
+    *,
+    source: str = DataSource.INTERVALS,
+) -> int:
+    """Store the source's calendar entries, idempotently.
+
+    ``external_id`` is the idempotency key where there is one: the same
+    session re-fetched, or one Tempo itself pushed and read back, updates
+    the row it already has rather than adding a second. An entry created in
+    the source's own interface carries no external id, and then the row's
+    own id is the key.
+    """
+    stored = 0
+    for entry in entries:
+        existing: PlannedWorkout | None = None
+        if entry.external_id:
+            existing = session.scalars(
+                select(PlannedWorkout)
+                .where(PlannedWorkout.external_id == entry.external_id)
+                .limit(1)
+            ).first()
+        if existing is None:
+            existing = session.get(PlannedWorkout, entry.id)
+        if existing is None:
+            existing = PlannedWorkout(id=entry.id)
+            session.add(existing)
+
+        existing.id = entry.id
+        existing.date = entry.date
+        existing.category = entry.category
+        existing.sport = entry.sport
+        existing.name = entry.name
+        existing.description = entry.description
+        existing.target_time_s = entry.target_time_s
+        existing.target_dist_m = entry.target_dist_m
+        existing.target_load = entry.target_load
+        existing.workout_doc = entry.workout_doc
+        existing.external_id = entry.external_id
+        existing.source = source
+        existing.updated_at = utcnow()
+        stored += 1
+    return stored
+
+
+def drop_planned_workouts_absent_from(
+    session: Session,
+    *,
+    oldest: dt.date,
+    newest: dt.date,
+    keep_ids: Collection[str],
+    source: str = DataSource.INTERVALS,
+) -> int:
+    """Remove entries the source no longer has in the fetched window.
+
+    A plan is a mirror of the source's calendar, so a session deleted there
+    has to disappear here too — otherwise the plan screen would show a
+    workout nobody intends to do. Scoped to the window that was actually
+    fetched and to this source, so nothing outside it is touched.
+    """
+    doomed = session.scalars(
+        select(PlannedWorkout)
+        .where(PlannedWorkout.source == source)
+        .where(PlannedWorkout.date >= oldest)
+        .where(PlannedWorkout.date <= newest)
+    ).all()
+    removed = 0
+    for entry in doomed:
+        if entry.id not in keep_ids:
+            session.delete(entry)
+            removed += 1
+    return removed
 
 
 def upsert_garmin_wellness(

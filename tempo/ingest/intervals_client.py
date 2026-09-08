@@ -76,7 +76,10 @@ class WellnessValues:
 
     date: dt.date
     resting_hr: int | None = None
-    hrv_rmssd: float | None = None
+    hrv: float | None = None
+    # Which field of the source the HRV value came from. Carried rather
+    # than interpreted: nothing here asserts what the measure is.
+    hrv_source_field: str | None = None
     sleep_secs: int | None = None
     sleep_score: int | None = None
     vo2max: float | None = None
@@ -89,13 +92,30 @@ class WellnessValues:
             value is None
             for value in (
                 self.resting_hr,
-                self.hrv_rmssd,
+                self.hrv,
                 self.sleep_secs,
                 self.sleep_score,
                 self.vo2max,
                 self.weight_kg,
             )
         )
+
+
+@dataclass(frozen=True, slots=True)
+class PlannedWorkoutValues:
+    """One entry of the source's calendar."""
+
+    id: str
+    date: dt.date
+    category: str | None = None
+    sport: str | None = None
+    name: str | None = None
+    description: str | None = None
+    target_time_s: int | None = None
+    target_dist_m: float | None = None
+    target_load: float | None = None
+    workout_doc: dict[str, Any] | None = None
+    external_id: str | None = None
 
 
 def _as_int(value: Any) -> int | None:
@@ -114,6 +134,13 @@ def _as_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _as_text(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped or None
 
 
 def _as_local_datetime(value: Any) -> dt.datetime | None:
@@ -173,11 +200,19 @@ def to_activity_summary(payload: dict[str, Any]) -> ActivitySummary:
     )
 
 
+# HRV fields intervals.icu may carry, most specific first. Which measure
+# each one is is the source's business; Tempo records which was used.
+HRV_SOURCE_FIELDS: Final[tuple[str, ...]] = ("hrv", "hrvSDNN")
+
+
 def to_wellness_values(payload: dict[str, Any]) -> WellnessValues:
     """Map one wellness payload onto the fields Tempo stores.
 
-    ``hrv`` is intervals.icu's rMSSD; ``hrvSDNN`` is a different measure
-    and is deliberately not mixed into the same column.
+    The HRV value is taken from the first field of ``HRV_SOURCE_FIELDS``
+    that carries one, and the field's name is stored alongside it. No
+    assumption is made about which measure that is — a value from ``hrv``
+    and a value from ``hrvSDNN`` are different quantities, and downstream
+    code decides what to do about that rather than being told here.
     """
     raw_date = payload.get("id") or payload.get("date")
     if not isinstance(raw_date, str) or not raw_date.strip():
@@ -187,14 +222,58 @@ def to_wellness_values(payload: dict[str, Any]) -> WellnessValues:
     except ValueError as exc:
         raise ValueError(f"wellness payload has an unusable date {raw_date!r}") from exc
 
+    hrv: float | None = None
+    hrv_field: str | None = None
+    for field_name in HRV_SOURCE_FIELDS:
+        candidate = _as_float(payload.get(field_name))
+        if candidate is not None:
+            hrv, hrv_field = candidate, field_name
+            break
+
     return WellnessValues(
         date=day,
         resting_hr=_as_int(payload.get("restingHR")),
-        hrv_rmssd=_as_float(payload.get("hrv")),
+        hrv=hrv,
+        hrv_source_field=hrv_field,
         sleep_secs=_as_int(payload.get("sleepSecs")),
         sleep_score=_as_int(payload.get("sleepScore")),
         vo2max=_as_float(payload.get("vo2max")),
         weight_kg=_as_float(payload.get("weight")),
+    )
+
+
+def to_planned_workout(payload: dict[str, Any]) -> PlannedWorkoutValues:
+    """Map one calendar event onto the fields Tempo stores.
+
+    Entries whose category is not a workout come through as well; the
+    category travels with them and the consumer decides.
+    """
+    raw_id = payload.get("id")
+    event_id = str(raw_id).strip() if raw_id is not None else ""
+    if not event_id:
+        raise ValueError("event payload has no id")
+
+    start = _as_local_datetime(payload.get("start_date_local"))
+    if start is None:
+        raise ValueError(f"event {event_id} has no usable start_date_local")
+
+    raw_category = payload.get("category")
+    raw_doc = payload.get("workout_doc")
+    raw_external = payload.get("external_id")
+    return PlannedWorkoutValues(
+        id=event_id,
+        date=start.date(),
+        category=str(raw_category) if raw_category is not None else None,
+        sport=normalise_sport(payload.get("type")) if payload.get("type") else None,
+        name=_as_text(payload.get("name")),
+        description=_as_text(payload.get("description")),
+        target_time_s=_as_int(payload.get("moving_time")),
+        target_dist_m=_as_float(payload.get("distance")),
+        target_load=_as_float(payload.get("icu_training_load")),
+        workout_doc=raw_doc if isinstance(raw_doc, dict) else None,
+        external_id=(
+            str(raw_external).strip() or None if raw_external is not None else None
+        ),
     )
 
 
@@ -419,6 +498,19 @@ class IntervalsClient:
         for payload in payloads:
             try:
                 mapped.append(to_wellness_values(payload))
+            except ValueError as exc:
+                skipped.append(str(exc))
+        return mapped, skipped
+
+    @staticmethod
+    def events_from(
+        payloads: Iterable[dict[str, Any]],
+    ) -> tuple[list[PlannedWorkoutValues], list[str]]:
+        mapped: list[PlannedWorkoutValues] = []
+        skipped: list[str] = []
+        for payload in payloads:
+            try:
+                mapped.append(to_planned_workout(payload))
             except ValueError as exc:
                 skipped.append(str(exc))
         return mapped, skipped

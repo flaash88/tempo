@@ -303,3 +303,40 @@ Was hier nicht steht, ist nicht entschieden.
 - **FIT-Downloads werden atomar geschrieben** (`.part`, dann `rename`).
   Ein abgebrochener Download kann so nie als vollständige Datei
   missverstanden werden.
+
+### Nachtrag aus dem zweiten Review
+
+- **`planned_workout` spiegelt den Kalender der Quelle** (Migration
+  `0003`). `GET /athlete/0/events` schreibt jetzt dorthin, idempotent über
+  `external_id`; wo kein `external_id` existiert — Einträge, die in der
+  Oberfläche der Quelle entstanden sind — dient die eigene ID als
+  Schlüssel. Keine Sync-Status-Spalten: der Rückkanal ist Phase 6 und
+  bringt seine Buchhaltung selbst mit.
+- **Einträge, die nicht Trainingseinheiten sind, werden mitgespeichert.**
+  Der Kalender enthält auch `NOTE` und `RACE_A`; genau dafür ist die
+  Spalte `category` da, und Filtern würde Information wegwerfen, die der
+  Plan-Screen braucht.
+- **Der Kalender hat keinen eigenen Wasserstand.** Ein Plan liegt in der
+  Zukunft, das Fenster reicht also immer nach vorn und wird jeden Lauf
+  ganz neu gelesen. Das ist eine Anfrage, jeder Schreibvorgang ist
+  idempotent — und es ist die einzige Möglichkeit, dass eine an der Quelle
+  gelöschte Einheit hier ebenfalls verschwindet.
+- **Einträge, die die Quelle im abgefragten Fenster nicht mehr hat, werden
+  gelöscht.** Ein Plan ist ein Spiegel; eine Einheit, die niemand mehr
+  vorhat, wäre schlimmer als keine. Der Abgleich ist auf das tatsächlich
+  abgefragte Fenster und auf diese Quelle beschränkt. Das geht über den
+  Auftrag „idempotent über `external_id`" hinaus und ist bewusst so
+  gebaut — ohne den Abgleich sammelt die Tabelle Phantomeinheiten an.
+- **`EVENT_HORIZON_DAYS` (90) ist eine operative Grenze, keine
+  Kennzahlschwelle**, und steht deshalb in `sync.py`. Ein Quartal deckt
+  einen vollständigen Trainingsblock ab, ohne Jahre leeren Kalenders
+  mitzuziehen.
+- **`wellness_day.hrv_rmssd` heißt jetzt `hrv`, dazu kommt
+  `hrv_source_field`.** Welches HFV-Maß ein Wert ist, hängt von der Quelle
+  ab; der Feldname der Quelle reist deshalb mit dem Wert, statt dass der
+  Spaltenname eine Metrik behauptet, die niemand geprüft hat. Ein Wert aus
+  `hrv` und einer aus `hrvSDNN` sind verschiedene Größen — die Spalte
+  pooled sie nicht stillschweigend, und ein Wechsel des Feldnamens ist
+  für die Baseline ein Bruch.
+- **Der Einheitenname im Spaltennamen weicht hier bewusst.** Ohne die
+  Metrik ist die Einheit nicht bekannt; `hrv_ms` wäre eine Behauptung.

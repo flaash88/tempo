@@ -22,6 +22,7 @@ from tempo.db.models import (
     ActivityStream,
     DailyLoad,
     Lap,
+    PlannedWorkout,
     SyncLog,
     SyncState,
     SyncStatus,
@@ -30,6 +31,7 @@ from tempo.db.models import (
 from tempo.db.session import session_factory
 from tempo.ingest.intervals_client import IntervalsClient, RetryPolicy
 from tempo.ingest.sync import (
+    EVENT_HORIZON_DAYS,
     FULL_SYNC_OLDEST,
     INCREMENTAL_OVERLAP_DAYS,
     MIN_SYNC_INTERVAL,
@@ -95,10 +97,12 @@ class Api:
         *,
         activities: list[dict[str, Any]] | None = None,
         wellness: list[dict[str, Any]] | None = None,
+        events: list[dict[str, Any]] | int | None = None,
         fit: dict[str, bytes | int] | None = None,
     ) -> None:
         self.activities = activities or []
         self.wellness = wellness or []
+        self.events: list[dict[str, Any]] | int = [] if events is None else events
         self.fit = fit or {}
         self.requests: list[httpx.Request] = []
         self.waits: list[float] = []
@@ -110,6 +114,10 @@ class Api:
             return httpx.Response(200, json=self.activities)
         if path.endswith("/wellness"):
             return httpx.Response(200, json=self.wellness)
+        if path.endswith("/events"):
+            if isinstance(self.events, int):
+                return httpx.Response(self.events, json={"error": "boom"})
+            return httpx.Response(200, json=self.events)
         if path.endswith("/fit-file"):
             activity_id = path.split("/")[-2]
             payload = self.fit.get(activity_id)
@@ -709,3 +717,242 @@ def test_recompute_runs_through_after_a_sync(
     empty_day = rows[dt.date(2026, 1, 18)]
     assert empty_day.duration_s == 0
     assert empty_day.trimp == 0.0
+
+
+# --- the source's calendar ---------------------------------------------
+
+
+def event_payload(event_id: str, start_local: str, **overrides: Any) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "id": event_id,
+        "start_date_local": start_local,
+        "category": "WORKOUT",
+        "type": "Run",
+        "name": "Ruhiger Dauerlauf",
+        "description": "45 min in Zone 2",
+        "moving_time": 2700,
+        "distance": 8000.0,
+        "icu_training_load": 45.0,
+        "workout_doc": {"steps": [{"duration": 2700, "zone": 2}]},
+        "external_id": "tempo-2026-01-22-1",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_the_calendar_is_stored_as_planned_workouts(
+    engine: Engine, settings: Settings, open_session: Callable[[], Session]
+) -> None:
+    api = Api(events=[event_payload("e1", "2026-01-22T07:00:00")])
+
+    report = sync_intervals(engine, settings, now=NOW, client_factory=api.factory())
+
+    assert report.planned_workouts == 1
+    with open_session() as session:
+        planned = session.get(PlannedWorkout, "e1")
+
+    assert planned is not None
+    assert planned.date == dt.date(2026, 1, 22)
+    assert planned.category == "WORKOUT"
+    assert planned.sport == "Run"
+    assert planned.name == "Ruhiger Dauerlauf"
+    assert planned.target_time_s == 2700
+    assert planned.target_dist_m == pytest.approx(8000.0)
+    assert planned.target_load == pytest.approx(45.0)
+    assert planned.workout_doc == {"steps": [{"duration": 2700, "zone": 2}]}
+    assert planned.external_id == "tempo-2026-01-22-1"
+    assert planned.source == "intervals"
+
+
+def test_the_calendar_window_reaches_into_the_future(
+    engine: Engine, settings: Settings
+) -> None:
+    """A plan lives ahead of today, so the window has to as well."""
+    api = Api()
+
+    sync_intervals(engine, settings, now=NOW, client_factory=api.factory())
+
+    events = next(
+        request for request in api.requests if request.url.path.endswith("events")
+    )
+    expected = NOW.date() + dt.timedelta(days=EVENT_HORIZON_DAYS)
+    assert events.url.params["newest"] == expected.isoformat()
+
+
+def test_the_same_session_re_fetched_updates_one_row(
+    engine: Engine, settings: Settings, open_session: Callable[[], Session]
+) -> None:
+    """Idempotent over external_id, even when the source's own id changed."""
+    first = Api(events=[event_payload("e1", "2026-01-22T07:00:00")])
+    sync_intervals(engine, settings, now=NOW, client_factory=first.factory())
+
+    renumbered = Api(
+        events=[
+            event_payload("e999", "2026-01-22T07:00:00", name="Dauerlauf, etwas länger")
+        ]
+    )
+    sync_intervals(
+        engine,
+        settings,
+        now=NOW + dt.timedelta(hours=2),
+        client_factory=renumbered.factory(),
+    )
+
+    with open_session() as session:
+        rows = list(session.scalars(select(PlannedWorkout)))
+
+    assert len(rows) == 1
+    assert rows[0].id == "e999"
+    assert rows[0].name == "Dauerlauf, etwas länger"
+    assert rows[0].external_id == "tempo-2026-01-22-1"
+
+
+def test_an_entry_without_an_external_id_falls_back_to_its_own_id(
+    engine: Engine, settings: Settings, open_session: Callable[[], Session]
+) -> None:
+    """Sessions written in the source's own interface carry no external id."""
+    for offset in (0, 2):
+        api = Api(
+            events=[
+                event_payload("e1", "2026-01-22T07:00:00", external_id=None),
+                event_payload("e2", "2026-01-23T07:00:00", external_id=None),
+            ]
+        )
+        sync_intervals(
+            engine,
+            settings,
+            now=NOW + dt.timedelta(hours=offset),
+            client_factory=api.factory(),
+        )
+
+    with open_session() as session:
+        rows = list(session.scalars(select(PlannedWorkout)))
+
+    assert {row.id for row in rows} == {"e1", "e2"}
+    assert all(row.external_id is None for row in rows)
+
+
+def test_an_entry_deleted_at_the_source_disappears_here_too(
+    engine: Engine, settings: Settings, open_session: Callable[[], Session]
+) -> None:
+    """A plan mirrors the calendar; a phantom session would be worse than none."""
+    first = Api(
+        events=[
+            event_payload("e1", "2026-01-22T07:00:00"),
+            event_payload("e2", "2026-01-23T07:00:00", external_id="tempo-2"),
+        ]
+    )
+    sync_intervals(engine, settings, now=NOW, client_factory=first.factory())
+
+    second = Api(events=[event_payload("e1", "2026-01-22T07:00:00")])
+    report = sync_intervals(
+        engine,
+        settings,
+        now=NOW + dt.timedelta(hours=2),
+        client_factory=second.factory(),
+    )
+
+    assert report.planned_workouts_removed == 1
+    with open_session() as session:
+        assert [row.id for row in session.scalars(select(PlannedWorkout))] == ["e1"]
+
+
+def test_entries_outside_the_fetched_window_are_left_alone(
+    engine: Engine, settings: Settings, open_session: Callable[[], Session]
+) -> None:
+    with open_session() as session:
+        session.add(
+            PlannedWorkout(
+                id="far-future",
+                date=NOW.date() + dt.timedelta(days=EVENT_HORIZON_DAYS + 30),
+                source="intervals",
+            )
+        )
+        session.commit()
+
+    api = Api(events=[])
+    sync_intervals(engine, settings, now=NOW, client_factory=api.factory())
+
+    with open_session() as session:
+        assert session.get(PlannedWorkout, "far-future") is not None
+
+
+def test_a_note_in_the_calendar_is_kept_with_its_category(
+    engine: Engine, settings: Settings, open_session: Callable[[], Session]
+) -> None:
+    """Not every entry is a workout — the category says which is which."""
+    api = Api(
+        events=[
+            {
+                "id": "n1",
+                "start_date_local": "2026-01-22T00:00:00",
+                "category": "NOTE",
+                "name": "Wade zieht",
+            }
+        ]
+    )
+
+    sync_intervals(engine, settings, now=NOW, client_factory=api.factory())
+
+    with open_session() as session:
+        note = session.get(PlannedWorkout, "n1")
+
+    assert note is not None
+    assert note.category == "NOTE"
+    assert note.sport is None
+    assert note.target_time_s is None
+
+
+def test_an_unusable_event_is_skipped_and_noted(
+    engine: Engine, settings: Settings
+) -> None:
+    api = Api(
+        events=[event_payload("e1", "2026-01-22T07:00:00"), {"category": "WORKOUT"}]
+    )
+
+    report = sync_intervals(engine, settings, now=NOW, client_factory=api.factory())
+
+    assert report.planned_workouts == 1
+    assert report.status == SyncStatus.PARTIAL
+    assert any("no id" in note for note in report.notes)
+
+
+def test_a_failing_calendar_does_not_lose_activities_or_wellness(
+    engine: Engine,
+    settings: Settings,
+    tmp_path: Path,
+    open_session: Callable[[], Session],
+) -> None:
+    api = Api(
+        activities=[activity_payload("i1", "2026-01-15T07:30:00")],
+        wellness=[wellness_payload("2026-01-15")],
+        fit={"i1": fit_bytes(tmp_path)},
+        events=500,
+    )
+
+    report = sync_intervals(engine, settings, now=NOW, client_factory=api.factory())
+
+    assert report.status == SyncStatus.PARTIAL
+    assert any("events" in note for note in report.notes)
+    assert report.activities_stored == 1
+    assert report.wellness_days == 1
+    with open_session() as session:
+        state = session.get(SyncState, "intervals")
+        assert state is not None
+        assert state.last_activity_start == dt.datetime(2026, 1, 15, 7, 30)
+        assert state.last_wellness_date == dt.date(2026, 1, 20)
+
+
+def test_the_hrv_source_field_is_stored_with_the_value(
+    engine: Engine, settings: Settings, open_session: Callable[[], Session]
+) -> None:
+    api = Api(wellness=[wellness_payload("2026-01-15")])
+
+    sync_intervals(engine, settings, now=NOW, client_factory=api.factory())
+
+    with open_session() as session:
+        day = session.get(WellnessDay, dt.date(2026, 1, 15))
+
+    assert day is not None
+    assert day.hrv == pytest.approx(44.5)
+    assert day.hrv_source_field == "hrv"

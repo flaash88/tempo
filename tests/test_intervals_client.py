@@ -453,17 +453,35 @@ def test_an_unusable_activity_payload_is_rejected(payload: dict[str, Any]) -> No
         to_activity_summary(payload)
 
 
-def test_a_wellness_payload_maps_hrv_onto_rmssd() -> None:
+def test_a_wellness_payload_records_which_field_the_hrv_came_from() -> None:
     values = to_wellness_values(WELLNESS_PAYLOAD)
 
     assert values.date == dt.date(2026, 1, 15)
     assert values.resting_hr == 52
-    assert values.hrv_rmssd == pytest.approx(44.5)
+    assert values.hrv == pytest.approx(44.5)
+    assert values.hrv_source_field == "hrv"
     assert values.sleep_secs == 25200
     assert values.sleep_score == 72
     assert values.vo2max == pytest.approx(48.1)
     assert values.weight_kg == pytest.approx(74.3)
     assert values.is_empty is False
+
+
+def test_a_second_hrv_field_is_used_but_named_as_itself() -> None:
+    """Two different measures must not be silently pooled in one column."""
+    payload = {"id": "2026-01-15", "hrvSDNN": 88.0}
+
+    values = to_wellness_values(payload)
+
+    assert values.hrv == pytest.approx(88.0)
+    assert values.hrv_source_field == "hrvSDNN"
+
+
+def test_a_day_without_any_hrv_field_names_none() -> None:
+    values = to_wellness_values({"id": "2026-01-15", "restingHR": 52})
+
+    assert values.hrv is None
+    assert values.hrv_source_field is None
 
 
 def test_a_wellness_day_with_nothing_in_it_reports_itself_as_empty() -> None:

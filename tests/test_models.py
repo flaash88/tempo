@@ -113,7 +113,8 @@ def test_wellness_day_may_carry_a_resting_hr_without_hrv(
 
     assert day is not None
     assert day.resting_hr is not None
-    assert day.hrv_rmssd is None
+    assert day.hrv is None
+    assert day.hrv_source_field is None
 
 
 def test_a_day_without_a_session_is_stored_as_load_zero(

@@ -193,7 +193,7 @@ def test_an_existing_wellness_day_keeps_its_source_and_its_values(
     assert day is not None
     assert day.body_battery == 71
     assert day.source == "intervals"
-    assert day.hrv_rmssd is not None
+    assert day.hrv is not None
 
 
 def test_a_day_with_no_reading_is_not_written(

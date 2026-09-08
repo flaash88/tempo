@@ -115,6 +115,10 @@ docker compose exec tempo tempo sync --full     # gesamte Historie
 docker compose exec tempo tempo recompute --all
 ```
 
+Der Sync spiegelt zusätzlich den Kalender von intervals.icu nach
+`planned_workout` — geplante Einheiten, Wettkämpfe und Notizen. Was dort
+gelöscht wird, verschwindet beim nächsten Lauf auch hier.
+
 Danach genügt der inkrementelle Sync; er fragt jede Quelle höchstens
 stündlich ab und setzt an dem gespeicherten Wasserstand an:
 
