@@ -21,6 +21,7 @@ from tempo.api.routes import (
     today,
     trends,
     wellness,
+    workouts,
 )
 from tempo.api.routes import (
     settings as settings_routes,
@@ -81,6 +82,7 @@ def create_app(
     app.include_router(thresholds.router)
     app.include_router(sync.router)
     app.include_router(wellness.router)
+    app.include_router(workouts.router)
     app.include_router(ai.router)
     return app
 

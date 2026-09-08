@@ -183,6 +183,25 @@ class SubjectiveUpdate(BaseModel):
     mood: int | None = Field(default=None, ge=1, le=10)
 
 
+class WorkoutSyncState(BaseModel):
+    """How far one session has got towards the watch.
+
+    The states the Plan screen draws: not transferred, transferring, on the
+    watch, changed since it was transferred, and failed. ``confirmed_at``
+    is here too, because the interface has to tell "ready to send" from
+    "still a suggestion" — nothing goes out without it.
+    """
+
+    status: Literal["not_sent", "sending", "on_watch", "outdated", "failed"]
+    confirmed_at: dt.datetime | None = None
+    synced_at: dt.datetime | None = None
+    # Why the last attempt failed. Never carries a credential.
+    error: str | None = None
+    # False for a session the source owns: it is already where it came
+    # from, and Tempo does not write it anywhere.
+    sendable: bool = False
+
+
 class PlannedWorkoutSummary(BaseModel):
     """One calendar entry, as the plan and today screens show it."""
 
@@ -199,6 +218,8 @@ class PlannedWorkoutSummary(BaseModel):
     external_id: str | None = None
     # True when an activity of the same sport is already recorded that day.
     done: bool = False
+    source: str = "intervals"
+    sync: WorkoutSyncState
 
 
 class TodayResponse(BaseModel):
@@ -508,6 +529,30 @@ class AiAnswerResponse(BaseModel):
         description="Context dropped to fit the size limit, in the order dropped.",
     )
     cost_eur: float = 0.0
+
+
+class WorkoutProposalRequest(BaseModel):
+    """A session Tempo suggests. Plausibility only — no coaching here."""
+
+    model_config = {"extra": "forbid"}
+
+    date: dt.date
+    sport: str = Field(default="Run", max_length=32)
+    name: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=4_000)
+    target_time_s: int | None = Field(default=None, gt=0, le=86_400)
+    target_dist_m: float | None = Field(default=None, gt=0, le=1_000_000)
+    target_load: float | None = Field(default=None, ge=0, le=1_000)
+    workout_doc: dict[str, Any] | None = None
+
+
+class WorkoutPushResponse(BaseModel):
+    """The result of one transfer attempt."""
+
+    workout: PlannedWorkoutSummary
+    # False when nothing was sent because nothing had changed.
+    sent: bool
+    detail: str | None = None
 
 
 class AiBudgetError(BaseModel):

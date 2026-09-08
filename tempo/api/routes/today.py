@@ -20,8 +20,9 @@ from tempo.api.schemas import (
     SleepValue,
     SubjectiveDay,
     TodayResponse,
+    WorkoutSyncState,
 )
-from tempo.db.models import PlannedWorkout
+from tempo.db.models import DataSource, PlannedWorkout
 from tempo.reports import build_today_extras
 from tempo.snapshot import build_snapshot
 
@@ -44,6 +45,14 @@ def planned_summary(
         workout_doc=entry.workout_doc,
         external_id=entry.external_id,
         done=done,
+        source=entry.source,
+        sync=WorkoutSyncState(
+            status=entry.sync_status,  # type: ignore[arg-type]
+            confirmed_at=entry.confirmed_at,
+            synced_at=entry.synced_at,
+            error=entry.sync_error,
+            sendable=entry.source == DataSource.TEMPO,
+        ),
     )
 
 
