@@ -18,6 +18,7 @@ from tempo.api.routes.sync import collect_status
 from tempo.api.schemas import (
     PlannedWorkoutSummary,
     SleepValue,
+    SubjectiveDay,
     TodayResponse,
 )
 from tempo.db.models import PlannedWorkout
@@ -70,6 +71,17 @@ def get_today(
         resting_hr=envelope(snapshot.resting_hr, baseline_value),
         resting_hr_latest=extras.resting_hr_latest,
         sleep=envelope(extras.sleep, lambda seconds: SleepValue(seconds=seconds)),
+        subjective=(
+            None
+            if extras.subjective is None
+            else SubjectiveDay(
+                date=extras.subjective.date,
+                fatigue=extras.subjective.fatigue,
+                soreness=extras.subjective.soreness,
+                mood=extras.subjective.mood,
+                source=extras.subjective.source,
+            )
+        ),
         form=envelope(snapshot.form, form_value),
         acwr=plain(snapshot.acwr),
         planned=(

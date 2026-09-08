@@ -181,9 +181,16 @@ def upsert_wellness(
         day.sleep_score = entry.sleep_score
         day.vo2max = entry.vo2max
         day.weight_kg = entry.weight_kg
-        day.fatigue = entry.fatigue
-        day.soreness = entry.soreness
-        day.mood = entry.mood
+        # Only overwrite the subjective fields when the source carries them;
+        # an entry the athlete made by hand is not erased by a sync that has
+        # nothing to say about how the day felt.
+        if any(
+            value is not None for value in (entry.fatigue, entry.soreness, entry.mood)
+        ):
+            day.fatigue = entry.fatigue
+            day.soreness = entry.soreness
+            day.mood = entry.mood
+            day.subjective_source = source
         day.source = source
         stored += 1
     return stored

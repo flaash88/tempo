@@ -663,6 +663,23 @@ Was hier nicht steht, ist nicht entschieden.
 - **Das Modell in der KI-Fußzeile kommt aus der Config** und steht in
   `GET /api/today` als `ai_model` — nirgends hartkodiert.
 
+### Bekannter Optimierungskandidat: Zonenanteile in `/api/trends`
+
+- **Der Endpunkt liest für die Wochen-Zonenanteile jeden Stream im
+  Fenster.** Das ist eine Aggregation über Rohdaten zur Anfragezeit, und
+  sie wächst linear mit der Fensterlänge und der Datendichte.
+- **Gemessen mit der echten Datenlage** (7 Aktivitäten, 371 Tage
+  Kalender, insgesamt rund 23 000 Stream-Sekunden), Median aus fünf
+  Läufen: `6w` 6 ms, `12w` 6 ms, **`52w` 26 ms**. Auf einem Debian-Rechner
+  zuhause ist das nichts.
+- **Die Schwelle ist 300 ms bei `window=52w`.** Wird sie überschritten,
+  ist der Zeitpunkt gekommen, die Zonenanteile vorzuberechnen — je
+  Aktivität beim Recompute in eine eigene Tabelle, statt sie bei jeder
+  Anfrage neu aus den Streams zu rechnen. Der aktuelle Abstand zu dieser
+  Schwelle ist Faktor zwölf, also wird hier nichts gebaut, was noch
+  niemand braucht; die Zahl steht hier, damit die Entscheidung beim
+  nächsten Mal gemessen und nicht geschätzt wird.
+
 ### Kleinigkeiten
 
 - **`GET /api/plan` ohne Zeitraum liefert die laufende Woche**, Montag bis
@@ -674,3 +691,26 @@ Was hier nicht steht, ist nicht entschieden.
   brauchen genau eine Einheit, und die ist ihre ganze Historie — aber die
   Veraltung gilt weiter, weil ein Lauf vom Januar keine Aussage über heute
   ist.
+
+### Subjektive Tagesform
+
+- **`GET /api/today` liefert `fatigue`, `soreness` und `mood` roh aus**,
+  ohne Deutung: keine Skala wird behauptet, keine Richtung unterstellt.
+  Was eine 2 bedeutet und ob sie besser ist als eine 3, hängt von der
+  Quelle ab und ist gegen keine bestätigt.
+- **`PUT /api/wellness/{date}` schreibt dieselben drei Felder.** Ein nicht
+  genanntes Feld bleibt, ein als `null` gesendetes wird geleert. Die Zeile
+  wird angelegt, wenn der Tag noch keine hat — der Athlet kann sagen, wie
+  ein Tag war, an dem die Uhr nichts zu sagen hat.
+- **Die Grenzen 1 bis 10 sind eine Plausibilitätsprüfung, keine
+  Skalenaussage.** Sie halten einen Tippfehler und eine versehentliche
+  Null aus der Spalte, mehr nicht.
+- **`wellness_day.subjective_source` trägt die Herkunft der drei Felder
+  getrennt** (Migration `0005`). Sobald der Athlet einen Tag bewerten
+  kann, dessen Messwerte von intervals.icu stammen, hat eine einzige
+  `source`-Spalte zwei Antworten — und für die spätere Kalibrierung ist
+  genau die Unterscheidung zwischen eigener Eingabe und synchronisiertem
+  Wert die interessante.
+- **Ein Sync ohne subjektive Werte überschreibt eine Handeingabe nicht.**
+  Der Import setzt die drei Felder nur, wenn die Quelle überhaupt welche
+  liefert.

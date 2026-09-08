@@ -839,3 +839,189 @@ def test_no_answer_anywhere_carries_a_credential(
         "/health",
     ):
         assert_no_credentials(client.get(path).text)
+
+
+# --- subjective daily form ---------------------------------------------
+
+
+def test_today_carries_the_subjective_values_raw(
+    client: TestClient, open_session: Callable[[], Session]
+) -> None:
+    """Uninterpreted, with the source that recorded them."""
+    with open_session() as session:
+        seed_wellness(session, 3)
+        day = session.get(WellnessDay, today())
+        assert day is not None
+        day.fatigue = 2
+        day.soreness = 4
+        day.mood = 1
+        day.subjective_source = "intervals"
+        session.commit()
+
+    payload = client.get("/api/today").json()["subjective"]
+
+    assert payload["fatigue"] == 2
+    assert payload["soreness"] == 4
+    assert payload["mood"] == 1
+    assert payload["source"] == "intervals"
+    assert payload["date"] == today().isoformat()
+
+
+def test_today_says_nothing_entered_rather_than_nothing_at_all(
+    client: TestClient, open_session: Callable[[], Session]
+) -> None:
+    with open_session() as session:
+        seed_wellness(session, 1)
+        session.commit()
+
+    payload = client.get("/api/today").json()["subjective"]
+
+    assert payload is not None
+    assert payload["fatigue"] is None
+    assert payload["source"] is None
+
+
+def test_a_day_without_a_row_has_no_subjective_block(client: TestClient) -> None:
+    assert client.get("/api/today").json()["subjective"] is None
+
+
+def test_the_athlete_can_record_how_a_day_felt(
+    client: TestClient, open_session: Callable[[], Session]
+) -> None:
+    response = client.put(
+        f"/api/wellness/{today().isoformat()}",
+        json={"fatigue": 3, "soreness": 2, "mood": 4},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert (payload["fatigue"], payload["soreness"], payload["mood"]) == (3, 2, 4)
+    assert payload["source"] == "manual"
+
+    with open_session() as session:
+        row = session.get(WellnessDay, today())
+    assert row is not None
+    assert row.fatigue == 3
+    assert row.subjective_source == "manual"
+
+
+def test_an_entry_creates_the_day_when_the_watch_has_nothing_to_say(
+    client: TestClient, open_session: Callable[[], Session]
+) -> None:
+    day = today() - dt.timedelta(days=3)
+
+    client.put(f"/api/wellness/{day.isoformat()}", json={"mood": 5})
+
+    with open_session() as session:
+        row = session.get(WellnessDay, day)
+    assert row is not None
+    assert row.mood == 5
+    assert row.hrv is None
+
+
+def test_one_field_leaves_the_others_alone(client: TestClient) -> None:
+    client.put(
+        f"/api/wellness/{today().isoformat()}",
+        json={"fatigue": 3, "soreness": 2, "mood": 4},
+    )
+
+    payload = client.put(
+        f"/api/wellness/{today().isoformat()}", json={"mood": 1}
+    ).json()
+
+    assert payload["mood"] == 1
+    assert payload["fatigue"] == 3
+    assert payload["soreness"] == 2
+
+
+def test_a_field_sent_as_null_is_cleared(client: TestClient) -> None:
+    client.put(f"/api/wellness/{today().isoformat()}", json={"fatigue": 3})
+
+    payload = client.put(
+        f"/api/wellness/{today().isoformat()}", json={"fatigue": None}
+    ).json()
+
+    assert payload["fatigue"] is None
+
+
+def test_an_entry_does_not_disturb_the_measured_values(
+    client: TestClient, open_session: Callable[[], Session]
+) -> None:
+    with open_session() as session:
+        seed_wellness(session, 1)
+        session.commit()
+
+    client.put(f"/api/wellness/{today().isoformat()}", json={"fatigue": 2})
+
+    with open_session() as session:
+        row = session.get(WellnessDay, today())
+    assert row is not None
+    assert row.hrv is not None
+    assert row.resting_hr is not None
+    assert row.source == "intervals"
+    assert row.subjective_source == "manual"
+
+
+def test_a_sync_without_subjective_values_keeps_the_athletes_entry(
+    client: TestClient, open_session: Callable[[], Session]
+) -> None:
+    """A hand-written note is not erased by a sync that says nothing about it."""
+    from tempo.ingest.intervals_client import WellnessValues
+    from tempo.ingest.store import upsert_wellness
+
+    client.put(f"/api/wellness/{today().isoformat()}", json={"fatigue": 2})
+
+    with open_session() as session:
+        upsert_wellness(
+            session, [WellnessValues(date=today(), resting_hr=51, hrv=44.0)]
+        )
+        session.commit()
+        row = session.get(WellnessDay, today())
+
+    assert row is not None
+    assert row.fatigue == 2
+    assert row.subjective_source == "manual"
+    assert row.resting_hr == 51
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"fatigue": 0},
+        {"fatigue": 11},
+        {"mood": -1},
+        {"motivation": 3},
+        {"fatigue": "hoch"},
+    ],
+)
+def test_an_implausible_entry_is_refused(
+    client: TestClient, body: dict[str, Any]
+) -> None:
+    """A plausibility bound, not a claim about the scale."""
+    response = client.put(f"/api/wellness/{today().isoformat()}", json=body)
+
+    assert response.status_code == 422
+
+
+def test_an_empty_body_says_so(client: TestClient) -> None:
+    response = client.put(f"/api/wellness/{today().isoformat()}", json={})
+
+    assert response.status_code == 400
+    assert "Kein Feld" in response.json()["detail"]
+
+
+def test_a_day_in_the_future_cannot_be_rated(client: TestClient) -> None:
+    tomorrow = today() + dt.timedelta(days=1)
+
+    response = client.put(f"/api/wellness/{tomorrow.isoformat()}", json={"mood": 3})
+
+    assert response.status_code == 400
+
+
+def test_recording_a_day_needs_a_session(configured: Settings) -> None:
+    with TestClient(create_app(configured), base_url="https://testserver") as anonymous:
+        response = anonymous.put(
+            f"/api/wellness/{today().isoformat()}", json={"mood": 3}
+        )
+
+    assert response.status_code == 401

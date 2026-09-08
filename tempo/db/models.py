@@ -179,6 +179,10 @@ class WellnessDay(Base):
     fatigue: Mapped[int | None] = mapped_column(Integer)
     soreness: Mapped[int | None] = mapped_column(Integer)
     mood: Mapped[int | None] = mapped_column(Integer)
+    # Where those three came from, kept apart from the row's own source: the
+    # athlete can enter how a day felt on a day whose measurements arrived
+    # from elsewhere, and then one source column has two answers.
+    subjective_source: Mapped[str | None] = mapped_column(String(16))
     source: Mapped[str] = mapped_column(
         String(16), nullable=False, default=DataSource.INTERVALS
     )

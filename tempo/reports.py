@@ -22,6 +22,7 @@ from tempo.db.models import (
     AiCall,
     AthleteSettings,
     DailyLoad,
+    DataSource,
     FitnessDay,
     Lap,
     PlannedWorkout,
@@ -905,6 +906,17 @@ def build_usage_report(engine: Engine, *, as_of: dt.date | None = None) -> Usage
 
 
 @dataclass(frozen=True, slots=True)
+class SubjectiveReport:
+    """The three subjective readings of one day, exactly as recorded."""
+
+    date: dt.date
+    fatigue: int | None
+    soreness: int | None
+    mood: int | None
+    source: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class TodayExtras:
     """Parts of the Heute screen that are not metric results."""
 
@@ -914,6 +926,60 @@ class TodayExtras:
     planned: PlannedWorkout | None
     planned_done: bool
     plan_context: str | None
+    subjective: SubjectiveReport | None = None
+
+
+def _subjective_of(row: WellnessDay | None, day: dt.date) -> SubjectiveReport | None:
+    """The day's subjective readings, exactly as recorded.
+
+    ``None`` when the day has no row at all; a row with none of the three
+    still comes back, so the interface can tell "nothing entered yet" from
+    "no such day".
+    """
+    if row is None:
+        return None
+    return SubjectiveReport(
+        date=day,
+        fatigue=row.fatigue,
+        soreness=row.soreness,
+        mood=row.mood,
+        source=row.subjective_source,
+    )
+
+
+def set_subjective(
+    engine: Engine,
+    day: dt.date,
+    *,
+    fatigue: int | None = None,
+    soreness: int | None = None,
+    mood: int | None = None,
+    fields: Sequence[str] = (),
+    source: str = DataSource.MANUAL,
+) -> SubjectiveReport:
+    """Record how a day felt.
+
+    Creates the wellness row when the day has none: the athlete can say how
+    a day felt on a day the watch has nothing to say about. Only the fields
+    named in ``fields`` are touched, so sending one leaves the other two
+    alone while sending one as null clears it.
+
+    Nothing is interpreted on the way in. The values are stored as given,
+    and ``subjective_source`` records that they are the athlete's own.
+    """
+    values = {"fatigue": fatigue, "soreness": soreness, "mood": mood}
+    with session_scope(engine) as session:
+        row = session.get(WellnessDay, day)
+        if row is None:
+            row = WellnessDay(date=day, source=source)
+            session.add(row)
+        for name in fields:
+            setattr(row, name, values[name])
+        row.subjective_source = source
+        session.flush()
+        report = _subjective_of(row, day)
+    assert report is not None
+    return report
 
 
 def build_today_extras(engine: Engine, *, as_of: dt.date | None = None) -> TodayExtras:
@@ -921,6 +987,7 @@ def build_today_extras(engine: Engine, *, as_of: dt.date | None = None) -> Today
 
     with session_scope(engine) as session:
         wellness = list(session.scalars(select(WellnessDay).order_by(WellnessDay.date)))
+        subjective = _subjective_of(session.get(WellnessDay, as_of), as_of)
         planned = _planned_for(session, as_of, None)
         recorded = session.scalars(
             select(Activity.id).where(
@@ -950,6 +1017,7 @@ def build_today_extras(engine: Engine, *, as_of: dt.date | None = None) -> Today
         planned=planned,
         planned_done=recorded is not None,
         plan_context=(planned.name if planned and planned.category == "NOTE" else None),
+        subjective=subjective,
     )
 
 

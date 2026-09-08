@@ -43,6 +43,7 @@ GUARDED = [
     ("GET", "/api/thresholds"),
     ("POST", "/api/sync"),
     ("GET", "/api/sync/status"),
+    ("PUT", "/api/wellness/2026-09-08"),
 ]
 
 

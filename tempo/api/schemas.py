@@ -145,6 +145,42 @@ class SleepValue(BaseModel):
     score: int | None = None
 
 
+class SubjectiveDay(BaseModel):
+    """How a day felt, as it was entered. Raw, and read by nothing.
+
+    No scale is asserted and no direction is implied: what a 2 means, and
+    whether it is better or worse than a 3, depends on the source and has
+    not been confirmed against one. ``source`` says where the three values
+    came from so a later calibration can tell an athlete's own entry from a
+    synced one.
+    """
+
+    date: dt.date
+    fatigue: int | None = None
+    soreness: int | None = None
+    mood: int | None = None
+    source: str | None = None
+
+    @property
+    def is_empty(self) -> bool:
+        return all(value is None for value in (self.fatigue, self.soreness, self.mood))
+
+
+class SubjectiveUpdate(BaseModel):
+    """What the athlete may record about a day.
+
+    The bounds are a plausibility check and nothing more: they keep a typo
+    or a stray zero out of the column without claiming to know the scale.
+    A field left out stays as it is; a field sent as null is cleared.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    fatigue: int | None = Field(default=None, ge=1, le=10)
+    soreness: int | None = Field(default=None, ge=1, le=10)
+    mood: int | None = Field(default=None, ge=1, le=10)
+
+
 class PlannedWorkoutSummary(BaseModel):
     """One calendar entry, as the plan and today screens show it."""
 
@@ -176,6 +212,8 @@ class TodayResponse(BaseModel):
     resting_hr: MetricEnvelope[BaselineValue]
     resting_hr_latest: int | None = None
     sleep: MetricEnvelope[SleepValue]
+    # Raw and uninterpreted; nothing in the metric engine reads them.
+    subjective: SubjectiveDay | None = None
     form: MetricEnvelope[FormValue]
     acwr: MetricEnvelope[float]
     planned: PlannedWorkoutSummary | None = None
