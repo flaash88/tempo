@@ -72,13 +72,27 @@
   --inset-right: env(safe-area-inset-right, 0px);
 }
 
-html,
-body,
-#root {
+/* The app shell.
+ *
+ * Pinned with position: fixed and inset: 0 rather than sized in viewport
+ * units. That is the whole point: a fixed box at inset 0 fills whatever
+ * the browser considers the visible area, and it does not care what
+ * 100vh, 100dvh or height:100% happen to mean in that mode. In iOS
+ * standalone those three do not agree with each other or with the screen,
+ * which is why the tab bar sat correctly in a Safari tab and wrongly in
+ * the installed app.
+ *
+ * The heights below stay as the fallback for anything that ignores the
+ * fixed shell, in the order least- to most-specific.
+ */
+html {
   height: 100%;
 }
 
 body {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   margin: 0;
   background: var(--t-bg);
   color: var(--t-ink);
@@ -88,6 +102,33 @@ body {
   -webkit-font-smoothing: antialiased;
   /* Nothing rubber-bands past the tab bar in standalone mode. */
   overscroll-behavior-y: none;
+}
+
+#root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  /* Without this a flex child with long content refuses to shrink, and
+     the scroll container inside it grows out of the shell again. */
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The one scrolling element on any screen. Everything else in the shell —
+   the tab bar — is a sibling in normal flow, so its position is a
+   consequence of the layout rather than of a coordinate that has to be
+   resolved against a viewport nobody agrees on. */
+[data-tempo-scroll] {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  /* The rubber band stays inside the screen instead of dragging the whole
+     app away from the tab bar. */
+  overscroll-behavior-y: contain;
+  /* Momentum scrolling inside a fixed shell, which older WebKit needs
+     spelling out. */
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Digits are read in columns, so they align in columns. */
