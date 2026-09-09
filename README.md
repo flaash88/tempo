@@ -406,11 +406,19 @@ npx playwright install chromium          # einmalig
 node web/scripts/audit-layout.mjs        # erwartet die App auf :8331
 ```
 
-Fährt die sieben Screens bei 393 × 852 mit den Safe-Area-Werten eines
-iPhone an und prüft, was nur am Gerät auffällt: scrollt das Dokument (es
-darf nicht — sonst wandert die fixierte Tab-Leiste unter iOS), gibt es
-genau einen Scroller, sitzt die Leiste am unteren Rand, horizontaler
-Overflow, Tap-Ziele unter 44 pt, Elemente unter dem Home-Indicator.
+Fährt die sieben Screens **in zwei Modi** an — als Tab und als
+installierte App (Chromium mit `--app=`, echtes `display-mode:
+standalone`, dazu die Safe-Area-Werte eines iPhone) — und prüft, was nur
+am Gerät auffällt: scrollt das Dokument (es darf nicht), gibt es genau
+einen Scroller, sitzt die Leiste am unteren Rand, horizontaler Overflow,
+Tap-Ziele unter 44 pt, Elemente unter dem Home-Indicator.
+
+WebKits eigene Viewport-Arithmetik kann Chromium nicht nachstellen. Dafür
+gibt es die Diagnose in der App: **Mehr → Diagnose** zeigt, was das Gerät
+über Anzeigemodus, Höhen, Sicherheitsabstände und die Lage der Tab-Leiste
+meldet, und legt alles als JSON in die Zwischenablage. Bei einem
+Layoutproblem, das nur auf dem Telefon auftritt, ist das der erste
+Griff — nicht der Debugger am Gerät.
 
 ### Bauen
 

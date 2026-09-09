@@ -1128,3 +1128,84 @@ Was hier nicht steht, ist nicht entschieden.
   Rand. `getBoundingClientRect` und `elementFromPoint` sagen beide, dass
   dort nichts ist — ein Kompositing-Artefakt der Aufnahme, kein
   Layoutfehler.
+
+### Standalone war anders als der Tab — und der vorige Fix war nicht drauf
+
+- **Gemeldet:** im Safari-Tab richtig, als installierte PWA falsch. Beim
+  Nachsehen: der laufende Build hatte den vorigen Layout-Fix gar nicht,
+  `main` trug weiterhin `min-h-full` und kein `dvh`. Der Body scrollte
+  also noch. **Damit ist die Beobachtung genau erklärt**: über einem
+  scrollenden Dokument kommt Safari im Tab zurecht, im Standalone-Modus
+  nicht.
+- **Trotzdem gehärtet**, weil die Meldung eine bessere Konstruktion
+  nahelegt als die vorige.
+
+### Die Hülle wird angeheftet, nicht bemessen
+
+- **`#root` ist `position: fixed; inset: 0`.** Eine fixierte Box bei Inset
+  null füllt das, was der Browser für sichtbar hält — und muss nicht
+  wissen, was `100vh`, `100dvh` und `height: 100%` in diesem Modus
+  bedeuten. Im iOS-Standalone sind sich die drei nicht einig, im Tab
+  schon; genau das war der Unterschied.
+- **Die Viewport-Einheiten bleiben als Fallback** auf `body`, in der
+  Reihenfolge `100vh` dann `100dvh`, für alles, was die fixierte Hülle
+  ignoriert.
+- **Die Frage nach `visualViewport` ist damit offen und beantwortbar
+  statt geraten:** die Diagnose zeigt `innerHeight`,
+  `visualViewport.height` und die tatsächliche Hüllenhöhe nebeneinander.
+  Weichen sie am Gerät voneinander ab, ist die Bindung an
+  `visualViewport` der nächste Schritt — vorher wäre sie eine Wette.
+
+### Die Tab-Leiste ist nicht mehr positioniert
+
+- **Kein `position: fixed` mehr**, keine `bottom: 0`. Die Leiste ist das
+  letzte Kind der fixierten Hülle und sitzt unten, weil das Layout sie
+  dorthin setzt. Es gibt keine Koordinate mehr, die gegen einen Viewport
+  aufgelöst werden müsste.
+- **Der Screen reserviert keinen Platz mehr für sie.** Sie schwebt nicht
+  mehr über dem Inhalt, sondern steht darunter — ein abgezogener
+  Leistenplatz wäre jetzt eine zweite Lücke.
+
+### Die Diagnose gehört in die App
+
+- **`/diagnose`, verlinkt unter „Mehr".** Anzeigemodus in beiden
+  Lesarten (`navigator.standalone` und `display-mode`), Höhen
+  (`innerHeight`, `visualViewport.height`/`offsetTop`,
+  Dokument-Scrollhöhe, und was `100vh`/`100dvh`/`100svh`/`100lvh` gerade
+  ergeben), die vier `env(safe-area-inset-*)`, Box und `position` der
+  Leiste, Hülle, Scroller-Zählung, Gerätedaten. Dazu ein Satz Befund und
+  ein Knopf, der alles als JSON in die Zwischenablage legt.
+- **Die CSS-Längen werden gemessen, nicht geparst:** eine unsichtbare
+  Sonde mit `height: 100dvh` bekommt vom Browser die Zahl, die er
+  tatsächlich verwendet.
+- **Sie muss funktionieren, wenn nichts anderes funktioniert.** Deshalb
+  ohne `matchMedia` lauffähig, ohne `visualViewport`, und mit einem
+  Textfeld als Rückfallweg, wenn Safari die Zwischenablage verweigert.
+
+### Der Standalone-Modus im Audit ist echt
+
+- **`Emulation.setEmulatedMedia` kann `display-mode` nicht** — nachgeprüft,
+  `matchMedia("(display-mode: standalone)")` bleibt `false`. Eine
+  Behauptung wäre das gewesen, kein Test.
+- **Chromium mit `--app=` liefert echtes Standalone.** Dazu injizierte
+  iPhone-Insets (59 oben, 34 unten) gegen die Tab-Werte (null).
+- **Playwrights Viewport-Emulation und `--app=` vertragen sich nicht**:
+  mit gesetztem Viewport geht das App-Fenster nicht auf. Also
+  `--window-size` und `viewport: null`, und alle Zusicherungen gegen
+  `window.innerHeight` statt gegen eine feste Zahl.
+- **Das Audit prüft seinen eigenen Modus**, bevor es misst — sonst
+  liefe die Standalone-Runde als Tab-Runde und niemand wüsste es. Genau
+  das ist beim ersten Versuch passiert und aufgefallen.
+- **Was es weiter nicht kann:** WebKits eigene Viewport-Arithmetik. Dafür
+  ist die Diagnose da.
+
+### Kleinigkeiten
+
+- **`mobile-web-app-capable`** steht jetzt neben Apples Schreibweise;
+  moderne Browser warnen über die alleinige `apple-`-Variante.
+- **`black-translucent` bleibt vorerst**, ist aber der nächste Verdacht,
+  wenn die Gerätewerte dorthin zeigen — die Diagnose gibt den Wert aus,
+  und die Stelle im `index.html` ist als solche kommentiert.
+- **Ein scrollendes Textfeld ist kein Layout-Scroller.** Das Audit
+  schlug auf dem JSON-Feld der Diagnose an; Formularelemente scrollen
+  ihren eigenen Inhalt und können nichts um sich herum verschieben.
