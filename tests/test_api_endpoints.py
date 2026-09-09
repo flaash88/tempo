@@ -1025,3 +1025,88 @@ def test_recording_a_day_needs_a_session(configured: Settings) -> None:
         )
 
     assert response.status_code == 401
+
+
+# --- what "ausstehend" counts ------------------------------------------
+
+
+def test_stored_fit_files_are_not_reported_as_pending(
+    client: TestClient,
+    configured: Settings,
+    open_session: Callable[[], Session],
+) -> None:
+    """The bug from the running instance: seven files, seven activities, "7".
+
+    ``data/fit/`` is where the downloaded files stay — ``activity.fit_path``
+    points into it — so counting everything in it counted every imported
+    activity and reported work that was long done.
+    """
+    configured.fit_dir.mkdir(parents=True, exist_ok=True)
+    with open_session() as session:
+        for index in range(3):
+            seed_run(session, f"i{index}", with_stream=False)
+            stored = session.get(Activity, f"i{index}")
+            assert stored is not None
+            stored.fit_path = f"fit/i{index}.fit"
+            (configured.fit_dir / f"i{index}.fit").write_bytes(b"not really a fit")
+        session.commit()
+
+    payload = client.get("/api/settings").json()
+
+    assert payload["fit_files_pending"] == 0
+
+
+def test_a_file_no_activity_refers_to_is_pending(
+    client: TestClient,
+    configured: Settings,
+    open_session: Callable[[], Session],
+) -> None:
+    """Dropped in by hand, or left by a sync that failed after the download."""
+    configured.fit_dir.mkdir(parents=True, exist_ok=True)
+    with open_session() as session:
+        seed_run(session, "i1", with_stream=False)
+        stored = session.get(Activity, "i1")
+        assert stored is not None
+        stored.fit_path = "fit/i1.fit"
+        session.commit()
+    (configured.fit_dir / "i1.fit").write_bytes(b"imported")
+    (configured.fit_dir / "von-der-uhr.fit").write_bytes(b"waiting")
+
+    payload = client.get("/api/settings").json()
+
+    assert payload["fit_files_pending"] == 1
+
+
+# --- a hash that never arrived intact ----------------------------------
+
+
+def test_a_truncated_hash_is_not_reported_as_a_wrong_password(
+    settings: Settings, engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The deployment's actual failure: Compose ate the $ separators."""
+    monkeypatch.setenv("TEMPO_PASSWORD_HASH", PASSWORD_HASH.split("$", 1)[0])
+    broken = load_settings()
+
+    with TestClient(create_app(broken), base_url="https://testserver") as client:
+        response = client.post("/api/auth/login", json={"password": PASSWORD})
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert "$-Zeichen" in detail
+    assert "verdoppeln" in detail
+    assert "Passwort falsch" not in detail
+
+
+def test_the_escaped_hash_logs_in(
+    settings: Settings, engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The form --write produces has to work without Compose unescaping it."""
+    monkeypatch.setenv("TEMPO_PASSWORD_HASH", PASSWORD_HASH.replace("$", "$$"))
+    escaped = load_settings()
+
+    with TestClient(create_app(escaped), base_url="https://testserver") as client:
+        response = client.post("/api/auth/login", json={"password": PASSWORD})
+        session_state = client.get("/api/auth/session").json()
+
+    assert response.status_code == 200
+    assert session_state["authenticated"] is True
