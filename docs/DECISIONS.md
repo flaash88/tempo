@@ -1036,3 +1036,46 @@ Was hier nicht steht, ist nicht entschieden.
   ist — und sie schickt den Athleten genau dorthin suchen, wo der Fehler
   nicht ist. Der Login antwortet in dem Fall mit `503` und dem Satz
   „TEMPO_PASSWORD_HASH unvollständig — $-Zeichen in .env verdoppeln".
+
+### Ein grüner Build war kein Beleg für eine erreichbare App
+
+- **Der Fund aus dem Deployment:** `GET /` antwortete mit 404, das gebaute
+  Frontend war im Image nicht vorhanden — und die CI war grün. Sie hat den
+  Build gebaut, das Image gebaut und `tempo --version` aufgerufen. Keiner
+  dieser Schritte fragt die App jemals nach der App.
+- **`scripts/smoke-http.sh` fragt sie:** `/` auf 200 mit HTML und der
+  App-Hülle, Manifest und Service Worker auf 200 mit `no-store`, eine
+  Client-Route auf 200, ein unbekannter `/api/`-Pfad auf 404. Das Skript
+  nimmt eine Adresse entgegen, damit dieselben Prüfungen gegen den
+  Container, gegen ein lokales uvicorn und gegen die echte Instanz hinter
+  dem Tunnel laufen können.
+- **`scripts/smoke-image.sh` startet den Container und lässt sie darauf
+  los.** In der CI ist das ein eigener Schritt hinter dem Image-Build.
+- **Gegenprobe gemacht:** ohne Frontend meldet das Skript
+  `FAIL: GET / answered 404` und endet mit 1 — also genau das Symptom, das
+  gemeldet wurde.
+
+### Wo das Frontend liegt, wird nicht mehr abgeleitet
+
+- **Der Pfad hing an `__file__`.** Ob `tempo/web` neben dem Paket liegt,
+  hängt davon ab, ob `uv sync` das Projekt verlinkt oder kopiert — eine
+  Annahme, die nie geprüft wurde und die im Container falsch sein kann.
+- **Jetzt: `web/dist` unter dem Arbeitsverzeichnis**, das im Container
+  `/app` ist und im Checkout die Repository-Wurzel. Ein Pfad, der in
+  beiden dasselbe bedeutet. Das Dockerfile kopiert genau dorthin.
+- **`TEMPO_WEB_DIR` überschreibt das**, falls ein Deployment es anders
+  legen will.
+- **Findet sich nichts, sagt das Log, wo gesucht wurde.** Wenn `/` das
+  nächste Mal 404 antwortet, ist diese Zeile das Erste, was man liest.
+
+### Kleinigkeiten, im selben Zug
+
+- **`web/dist/` und `*.tsbuildinfo` gehören nicht in den Build-Kontext.**
+  Ein lokaler Build im Kontext ist ein veralteter Build, den niemand
+  bemerkt, und eine mitgereiste `.tsbuildinfo` ließe `tsc -b` im
+  Node-Stage die Typprüfung überspringen.
+- **Zwei `.tsbuildinfo` waren versehentlich eingecheckt** und sind jetzt
+  ignoriert.
+- **`/docs` und `/openapi.json` stehen jetzt in der Ausnahmeliste des
+  SPA-Fallbacks**, server- wie serviceworkerseitig — vorher nur `/api` und
+  `/health`.

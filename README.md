@@ -98,6 +98,7 @@ sudo chown -R 1000:1000 data
 | Variable | Bedeutung |
 |---|---|
 | `TEMPO_DATA_DIR` | Datenbank und FIT-Dateien, Default `data` — im Container das Volume |
+| `TEMPO_WEB_DIR` | Gebautes Frontend, leer = `web/dist` unter dem Arbeitsverzeichnis |
 | `INTERVALS_API_KEY` | API-Key aus intervals.icu, Einstellungen → Developer |
 | `INTERVALS_ATHLETE_ID` | `0` als Selbstreferenz auf den eigenen Account |
 | `ANTHROPIC_API_KEY` | Key aus der Anthropic Console |
@@ -408,9 +409,24 @@ npm test           # vitest, liest u. a. den gebauten Service Worker
 ```
 
 Im Container passiert das in einer eigenen Build-Stufe; das Laufzeit-Image
-enthält kein Node, nur die fertigen Dateien. Die API liefert sie unter `/`
-aus — ein Ursprung für App und API, damit der Session-Cookie ohne
-CORS-Geschichte funktioniert.
+enthält kein Node, nur die fertigen Dateien unter `/app/web/dist`. Die API
+liefert sie unter `/` aus — ein Ursprung für App und API, damit der
+Session-Cookie ohne CORS-Geschichte funktioniert. `TEMPO_WEB_DIR`
+überschreibt den Pfad, falls nötig; findet sich nichts, steht im Log, wo
+gesucht wurde.
+
+### Nachsehen, ob die App wirklich ausgeliefert wird
+
+```bash
+scripts/smoke-http.sh https://tempo.example.com   # gegen die Instanz
+scripts/smoke-image.sh tempo:latest               # gegen das Image
+```
+
+Geprüft wird `/` auf 200 mit der App-Hülle, Manifest und Service Worker
+auf 200 mit `no-store`, eine Client-Route auf 200 und ein unbekannter
+`/api/`-Pfad auf 404. In der CI läuft das als eigener Schritt hinter dem
+Image-Build: **ein Build, dessen Ergebnis nicht abrufbar ist, ist nicht
+grün.**
 
 ## Entwicklung
 
