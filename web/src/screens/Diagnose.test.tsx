@@ -69,6 +69,15 @@ describe("the diagnosis screen", () => {
     expect(markup).toContain("userAgent");
   });
 
+  it("reports the strip below the shell, which is now invisible", () => {
+    const markup = render();
+
+    // Painted in the bar's colour, so it does not show — and therefore
+    // has to be readable as a number, or it becomes unfindable.
+    expect(markup).toContain("streifenDarunter");
+    expect(markup).toContain("streifenUnterDerLeiste");
+  });
+
   it("says in one sentence whether the bar sits right", () => {
     const markup = render();
 

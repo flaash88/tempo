@@ -71,8 +71,13 @@ type Snapshot = {
   };
   huelle: {
     position: string | null;
-    height: number | null;
+    top: number | null;
     bottom: number | null;
+    height: number | null;
+    /** Visible height minus the shell's bottom edge. Anything but 0 is a strip. */
+    streifenDarunter: number | null;
+    /** The band between the bar's bottom edge and the bottom of the screen. */
+    streifenUnterDerLeiste: number | null;
   };
   scroller: {
     anzahl: number;
@@ -169,8 +174,15 @@ function take(): Snapshot {
     },
     huelle: {
       position: shell ? getComputedStyle(shell).position : null,
-      height: shellBox ? Math.round(shellBox.height * 100) / 100 : null,
+      top: shellBox ? Math.round(shellBox.top * 100) / 100 : null,
       bottom: shellBox ? Math.round(shellBox.bottom * 100) / 100 : null,
+      height: shellBox ? Math.round(shellBox.height * 100) / 100 : null,
+      streifenDarunter: shellBox
+        ? Math.round((visibleBottom - shellBox.bottom) * 100) / 100
+        : null,
+      streifenUnterDerLeiste: bar
+        ? Math.round((visibleBottom - bar.bottom) * 100) / 100
+        : null,
     },
     scroller: {
       anzahl: scrollers.length,
@@ -192,10 +204,24 @@ function take(): Snapshot {
   };
 }
 
-/** The one number that decides whether the bar sits right. */
+/** The two numbers that decide whether the bottom edge is right. */
 function verdict(snapshot: Snapshot): { text: string; tone: string } {
   const gap = snapshot.tableiste.abstandZumUnterrand;
+  const shellGap = snapshot.huelle.streifenDarunter;
   if (gap === null) return { text: "Keine Tab-Leiste gefunden.", tone: "var(--st-warn)" };
+
+  if (shellGap !== null && Math.abs(shellGap) > 1) {
+    // The reported fault: the shell stops short and leaves a band. It is
+    // painted in the bar's colour now, so it is not visible — but it is
+    // still there, and this is where that stays visible.
+    return {
+      text:
+        `Die Hülle endet ${shellGap} px über dem sichtbaren Rand. Der Streifen ` +
+        `darunter ist in der Farbe der Leiste gefüllt, fällt also nicht auf — ` +
+        `die Hülle reicht aber nicht bis zum Rand.`,
+      tone: "var(--st-caution)",
+    };
+  }
   if (Math.abs(gap) <= 1) {
     return { text: "Die Leiste schließt bündig mit dem sichtbaren Rand ab.", tone: "var(--st-good)" };
   }
