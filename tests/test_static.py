@@ -22,7 +22,7 @@ from tempo.config import Settings
 
 
 @pytest.fixture
-def built(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def built(tmp_path: Path) -> Path:
     """A minimal frontend build, in the shape vite produces."""
     root = tmp_path / "web" / "dist"
     (root / "assets").mkdir(parents=True)
@@ -32,13 +32,15 @@ def built(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         json.dumps({"name": "Tempo", "display": "standalone"}), "utf-8"
     )
     (root / "assets" / "index-abc123.js").write_text("console.log(1)", "utf-8")
-    monkeypatch.setattr("tempo.api.static.CANDIDATES", (root,))
     return root
 
 
 @pytest.fixture
 def client(settings: Settings, built: Path) -> Iterator[TestClient]:
-    with TestClient(create_app(settings), base_url="https://testserver") as test_client:
+    configured = settings.model_copy(update={"web_dir": built})
+    with TestClient(
+        create_app(configured), base_url="https://testserver"
+    ) as test_client:
         yield test_client
 
 
@@ -90,24 +92,41 @@ def test_the_api_still_wins_over_the_frontend(client: TestClient) -> None:
     assert client.get("/api/today").status_code == 401
 
 
-def test_an_unknown_api_path_is_not_answered_with_the_shell(
-    client: TestClient,
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/gibt-es-nicht",
+        "/health/tiefer",
+        "/docs/gibt-es-nicht",
+        "/openapi.json.bak",
+    ],
+)
+def test_an_unknown_server_path_is_not_answered_with_the_shell(
+    client: TestClient, path: str
 ) -> None:
-    """An SPA fallback that swallows /api/… turns a 404 into a broken parse."""
-    response = client.get("/api/gibt-es-nicht")
+    """An SPA fallback that swallows these turns a 404 into a broken parse."""
+    response = client.get(path)
 
     assert response.status_code == 404
     assert "<title>" not in response.text
+
+
+def test_the_server_paths_themselves_still_answer(client: TestClient) -> None:
+    """The mount claims "/", so everything the server owns has to come first."""
+    assert client.get("/health").status_code == 200
+    assert client.get("/openapi.json").status_code == 200
+    assert client.get("/docs").status_code == 200
 
 
 def test_a_deployment_without_a_build_still_serves_the_api(
     settings: Settings, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """No frontend is not a broken deployment, just an API-only one."""
-    monkeypatch.setattr("tempo.api.static.CANDIDATES", (tmp_path / "nirgends",))
+    monkeypatch.chdir(tmp_path)
+    nowhere = settings.model_copy(update={"web_dir": tmp_path / "nirgends"})
 
-    assert find_frontend() is None
-    with TestClient(create_app(settings), base_url="https://testserver") as client:
+    assert find_frontend(nowhere.web_dir) is None
+    with TestClient(create_app(nowhere), base_url="https://testserver") as client:
         assert client.get("/health").status_code == 200
         assert client.get("/").status_code == 404
 
@@ -115,7 +134,36 @@ def test_a_deployment_without_a_build_still_serves_the_api(
 def test_mounting_reports_whether_it_found_anything(
     settings: Settings, built: Path
 ) -> None:
-    app = create_app(settings)
+    app = create_app(settings.model_copy(update={"web_dir": built}))
 
-    assert mount_frontend(app) is True
+    assert mount_frontend(app, built) is True
     assert app.state.frontend is True
+
+
+def test_the_build_is_found_beside_the_working_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The container's layout: /app/web/dist, with /app as the workdir.
+
+    Deliberately not derived from the package's own location — whether the
+    package is installed as a copy or as a link decides where __file__
+    points, and the app's reachability must not hang on that.
+    """
+    root = tmp_path / "web" / "dist"
+    root.mkdir(parents=True)
+    (root / "index.html").write_text("<!doctype html>", "utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    assert find_frontend() == root
+
+
+def test_the_override_wins(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    elsewhere = tmp_path / "woanders"
+    elsewhere.mkdir()
+    (elsewhere / "index.html").write_text("<!doctype html>", "utf-8")
+    beside = tmp_path / "web" / "dist"
+    beside.mkdir(parents=True)
+    (beside / "index.html").write_text("<!doctype html>", "utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    assert find_frontend(elsewhere) == elsewhere

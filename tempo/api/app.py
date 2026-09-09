@@ -105,7 +105,7 @@ def create_app(
     app.include_router(ai.router)
     # Last, because it claims "/": the API routes above have to match
     # first, and everything left over is a route in the app itself.
-    app.state.frontend = mount_frontend(app)
+    app.state.frontend = mount_frontend(app, app.state.settings.web_dir)
     return app
 
 

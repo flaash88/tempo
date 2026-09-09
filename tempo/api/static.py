@@ -28,21 +28,41 @@ from starlette.types import Scope
 
 log = logging.getLogger(__name__)
 
-# Where the frontend build lands. Beside the package in the container, and
-# two levels up in a checkout.
-CANDIDATES: Final = (
-    Path(__file__).resolve().parent.parent / "web",
-    Path(__file__).resolve().parents[2] / "web" / "dist",
-)
+
+# Where to look for the built frontend, in order.
+#
+# Explicit rather than derived from the package's own location: whether
+# ``tempo`` is installed as a copy or as a link decides where
+# ``__file__`` points, and hanging the app's availability on that is how a
+# green build ends up serving a 404. The working directory is the same in
+# the container and in a checkout — /app and the repository root — so
+# ``web/dist`` beneath it is one path that means one thing in both.
+def candidates(override: Path | None = None) -> tuple[Path, ...]:
+    """Where a build could be, most explicit first."""
+    found: list[Path] = []
+    if override is not None:
+        found.append(override)
+    found.append(Path.cwd() / "web" / "dist")
+    # Beside the package, for an installation that carries the build with it.
+    found.append(Path(__file__).resolve().parent.parent / "web")
+    return tuple(found)
+
 
 NEVER_CACHED: Final = frozenset({"sw.js", "manifest.webmanifest"})
+
+# Paths that belong to the server, not to the app. An unknown path under
+# one of these stays a 404: answering /api/gibt-es-nicht with the HTML
+# shell turns a typo in a path into a parse error in the client, which is
+# far harder to read than the 404 it actually is.
+SERVER_PREFIXES: Final = ("api", "health", "docs", "openapi.json")
 
 # The hashed assets are immutable: their name changes when they do.
 IMMUTABLE_PREFIX: Final = "assets/"
 
 
-def find_frontend() -> Path | None:
-    for candidate in CANDIDATES:
+def find_frontend(override: Path | None = None) -> Path | None:
+    """The first candidate that actually holds a build."""
+    for candidate in candidates(override):
         if (candidate / "index.html").is_file():
             return candidate
     return None
@@ -75,24 +95,26 @@ class FrontendFiles(StaticFiles):
         try:
             return await super().get_response(path, scope)
         except StarletteHTTPException as missing:
-            if missing.status_code != 404 or path.startswith(("api", "health")):
-                # An unknown endpoint stays a 404. Answering it with the
-                # HTML shell would turn a typo in a path into a parse error
-                # in the client, which is far harder to read.
+            if missing.status_code != 404 or path.startswith(SERVER_PREFIXES):
                 raise
             # Client-side routing: /trends is a route in the app, not a file.
             return await super().get_response("index.html", scope)
 
 
-def mount_frontend(app: FastAPI) -> bool:
+def mount_frontend(app: FastAPI, override: Path | None = None) -> bool:
     """Serve the built app at ``/``, if there is one. Returns whether there was.
 
     A deployment without a build is not broken — the API and /health work
     exactly as before — so this reports rather than raises.
     """
-    root = find_frontend()
+    root = find_frontend(override)
     if root is None:
-        log.info("no frontend build found; serving the API only")
+        # Named, not just counted: when the app answers 404 at "/", this
+        # line is the first thing worth reading.
+        log.warning(
+            "no frontend build found; serving the API only",
+            extra={"looked_in": ", ".join(str(path) for path in candidates(override))},
+        )
         return False
 
     @app.get("/manifest.webmanifest", include_in_schema=False)

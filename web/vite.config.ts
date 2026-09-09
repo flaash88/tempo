@@ -48,7 +48,10 @@ export default defineConfig({
           }),
         ],
         navigateFallback: "/index.html",
-        navigateFallbackDenylist: [/^\/api/, /^\/health/, /^\/docs/],
+        // The same list the server keeps in tempo/api/static.py: these
+        // paths are the server's, and a navigation to one of them must
+        // reach it rather than being answered from the app shell.
+        navigateFallbackDenylist: [/^\/api/, /^\/health/, /^\/docs/, /^\/openapi\.json/],
         cleanupOutdatedCaches: true,
         runtimeCaching: [
           {

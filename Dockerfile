@@ -31,11 +31,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 COPY alembic.ini ./
 COPY tempo ./tempo
-
-# Beside the package, where tempo.api.static looks for it first.
-COPY --from=web /web/dist ./tempo/web
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
+
+# /app/web/dist, the same path the repository has, and the same one the
+# working directory makes findable in both. Deliberately not derived from
+# where the package gets installed: that depends on whether uv links or
+# copies it, and the app's reachability must not hang on that.
+COPY --from=web /web/dist ./web/dist
 
 # The data volume holds the database and the raw FIT files. It belongs to
 # the unprivileged user the service runs as.
