@@ -1079,3 +1079,52 @@ Was hier nicht steht, ist nicht entschieden.
 - **`/docs` und `/openapi.json` stehen jetzt in der Ausnahmeliste des
   SPA-Fallbacks**, server- wie serviceworkerseitig — vorher nur `/api` und
   `/health`.
+
+### Die Tab-Leiste stand auf einem scrollenden Body
+
+- **Gemeldet:** die Leiste sitzt auf dem Plan-Screen anders als auf den
+  anderen. **Ursache:** der Bildschirmcontainer war ein
+  `min-height`-Kasten mit `overflow-y: auto`. Ein solcher Kasten wächst
+  mit seinem Inhalt, scrollt also nie selbst — gescrollt hat das Dokument.
+- **Damit hatte die App zwei Layout-Regime**, je nach Inhaltslänge.
+  Nachgemessen am alten Stand: Heute 1103 px, Trends 1079 px, Mehr
+  1473 px Dokumenthöhe bei 852 px Viewport — dort scrollte der Body. Plan,
+  Coach und Aktivitäten passten hinein, dort scrollte er nicht. **Plan war
+  der Ausreißer, weil er der kurze Screen ist.**
+- **In iOS Safari verschiebt ein scrollender Body fixierte Elemente**
+  relativ zum sichtbaren Bereich; über einem Body, der nicht scrollen
+  kann, bleiben sie stehen. Die Leiste war also durchaus `position:
+  fixed` — sie stand nur auf beweglichem Grund.
+- **Jetzt: die Hülle ist `100dvh`** (mit `100vh` davor als Fallback),
+  `body` bekommt `overflow: hidden`, und der Bildschirm ist der einzige
+  Scroller — `flex: 1 1 auto` statt `min-height`, mit `min-height: 0`,
+  weil ein Flex-Kind sonst nicht schrumpft und die Hülle wieder
+  aufsprengt.
+- **`overscroll-behavior-y: contain` auf dem Scroller**, damit das
+  Gummiband am Ende der Liste nicht die ganze App von der Leiste
+  wegzieht.
+
+### Geprüft wird das am Gerätemaß, nicht im Kopf
+
+- **`scripts/audit-layout.mjs`** fährt die sieben Screens bei 393 × 852 an
+  und misst: scrollt das Dokument, gibt es genau einen Scroller, sitzt die
+  Leiste am unteren Rand — auch nach dem Scrollen ans Ende —, gibt es
+  horizontalen Overflow, ist ein Tap-Ziel kleiner als 44 pt, liegt etwas
+  unter dem Home-Indicator.
+- **Die Safe-Area-Werte werden injiziert.** Chromium meldet für jedes
+  `env(safe-area-inset-*)` null; ein Audit auf einem Gerät ohne Notch und
+  ohne Home-Indicator wäre grün, während das echte scheitert.
+- **Playwright ist bewusst keine Projektabhängigkeit.** Hundert Megabyte
+  für ein Werkzeug, das bei Layoutänderungen von Hand läuft, nicht bei
+  jedem Build.
+- **In der Testsuite steht der Vertrag, nicht die Messung.** jsdom
+  rechnet kein Layout, aber es hält fest, dass der Bildschirm kein
+  `min-height`-Kasten ist, dass die Hülle `100dvh` mit `100vh`-Fallback
+  hat und dass die Leiste fixiert ist und ihre Beschriftungen über dem
+  Home-Indicator hält. Gegengeprobt: mit dem alten `min-h-full` wird der
+  Test rot.
+- **Ein Befund war keiner:** ein Vollbild-Screenshot bei
+  `deviceScaleFactor: 3` zeigte eine Geisterzeile der Tab-Leiste am oberen
+  Rand. `getBoundingClientRect` und `elementFromPoint` sagen beide, dass
+  dort nichts ist — ein Kompositing-Artefakt der Aufnahme, kein
+  Layoutfehler.

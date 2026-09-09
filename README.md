@@ -399,6 +399,19 @@ Athlet tippt darauf. Die App unter dem Daumen auszutauschen, während
 jemand eine Zahl liest, ist genau die Überraschung, die eine
 Trainingsapp nicht machen sollte.
 
+### Layout am Gerätemaß prüfen
+
+```bash
+npx playwright install chromium          # einmalig
+node web/scripts/audit-layout.mjs        # erwartet die App auf :8331
+```
+
+Fährt die sieben Screens bei 393 × 852 mit den Safe-Area-Werten eines
+iPhone an und prüft, was nur am Gerät auffällt: scrollt das Dokument (es
+darf nicht — sonst wandert die fixierte Tab-Leiste unter iOS), gibt es
+genau einen Scroller, sitzt die Leiste am unteren Rand, horizontaler
+Overflow, Tap-Ziele unter 44 pt, Elemente unter dem Home-Indicator.
+
 ### Bauen
 
 ```bash
