@@ -15,6 +15,12 @@ tokens.json
 .claude/
 .venv/
 node_modules/
+# A local build must not reach the context: the image's frontend comes
+# from the node stage, and a stale dist in the context is a stale dist
+# nobody notices. The .tsbuildinfo files would make `tsc -b` skip the
+# type check in that stage for the same reason.
+web/dist/
+*.tsbuildinfo
 __pycache__/
 .pytest_cache/
 .mypy_cache/
