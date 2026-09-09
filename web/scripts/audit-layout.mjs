@@ -34,6 +34,7 @@
  */
 
 import { mkdir, mkdtemp } from "node:fs/promises";
+import { decodePng, distance, hex } from "./png.mjs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium } from "playwright";
@@ -44,6 +45,14 @@ const OUT = process.env.TEMPO_SHOTS ?? "/tmp/tempo-layout";
 const VIEWPORT = { width: 393, height: 852 };
 const TABBAR = 49;
 const TOUCH = 44;
+// How far apart two 8-bit channels may be and still count as the same
+// colour: enough for the blur behind the bar, far less than the step
+// between the page ground and the bar's.
+const COLOUR_TOLERANCE = 6;
+// The bar's reference colour is read above its safe-area padding, so the
+// sample sits in the row the labels are in rather than in the strip the
+// home indicator occupies.
+const INSETS_SAMPLE_GAP = 24;
 
 // What iOS reports in each mode on a notched iPhone. In a Safari tab the
 // bottom inset is zero while the toolbar is up; installed, the home
@@ -67,9 +76,24 @@ const SCREENS = [
   ["/activities", "Aktivitäten"],
 ];
 
+/**
+ * Reproduce the reported fault on purpose.
+ *
+ * Chromium's shell does reach the bottom, so the strip is zero rows high
+ * here and the checks that look at it never fire — which is precisely how
+ * a green run coexisted with a strip on the device. TEMPO_SIMULATE_STRIP=34
+ * shortens the shell by that many pixels, and the run must then go red.
+ * A check that cannot be made to fail is not a check.
+ */
+const SIMULATED_STRIP = Number(process.env.TEMPO_SIMULATE_STRIP ?? 0);
+const simulationCss = SIMULATED_STRIP
+  ? `#root{bottom:${SIMULATED_STRIP}px!important}`
+  : "";
+
 const insetCss = (insets) =>
   `:root{--inset-top:${insets.top}px!important;--inset-bottom:${insets.bottom}px!important;` +
-  `--inset-left:${insets.left}px!important;--inset-right:${insets.right}px!important}`;
+  `--inset-left:${insets.left}px!important;--inset-right:${insets.right}px!important}` +
+  simulationCss;
 
 await mkdir(OUT, { recursive: true });
 
@@ -153,12 +177,30 @@ async function inspect(page, { tabbar, touch, insets }) {
         out.problems.push("ein anderes Element als der Screen scrollt");
       }
 
-      // 3. The shell fills the visible area, whatever the mode thinks that is.
+      // 3. The shell fills the visible area, whatever the mode thinks that
+      //    is — and its *bottom edge* has to be on the bottom edge, not
+      //    merely its height be right. A shell of the correct height that
+      //    sits 34px too high passes a height check and still leaves a
+      //    strip at the bottom, which is exactly what was reported.
       const shell = document.getElementById("root");
       const shellBox = shell.getBoundingClientRect();
-      out.shell = { height: Math.round(shellBox.height), position: getComputedStyle(shell).position };
+      out.shell = {
+        top: Math.round(shellBox.top),
+        bottom: Math.round(shellBox.bottom),
+        height: Math.round(shellBox.height),
+        position: getComputedStyle(shell).position,
+      };
       if (Math.abs(shellBox.height - vh) > 1) {
-        out.problems.push(`Hülle ${Math.round(shellBox.height)} statt ${vh}`);
+        out.problems.push(`Hülle ${Math.round(shellBox.height)} hoch statt ${vh}`);
+      }
+      if (Math.abs(shellBox.bottom - vh) > 1) {
+        out.problems.push(
+          `Hülle endet bei ${Math.round(shellBox.bottom)}, sichtbar bis ${vh} — ` +
+            `${Math.round(vh - shellBox.bottom)}px Streifen darunter`,
+        );
+      }
+      if (Math.abs(shellBox.top) > 1) {
+        out.problems.push(`Hülle beginnt bei ${Math.round(shellBox.top)} statt 0`);
       }
 
       // 4. The bar sits on the bottom edge, whatever the content length.
@@ -184,6 +226,25 @@ async function inspect(page, { tabbar, touch, insets }) {
       const label = nav.querySelector("span");
       if (label && label.getBoundingClientRect().bottom > vh - insets.bottom + 0.5) {
         out.problems.push("Beschriftung ragt in den Home-Indicator");
+      }
+
+      // 4b. Whatever lies between the bar's bottom edge and the bottom of
+      //     the screen must be the bar. Anything else — the shell, the
+      //     body, nothing at all — is a strip the page shows through.
+      out.strip = { from: Math.round(bar.bottom), to: vh, uncovered: [] };
+      for (let y = Math.ceil(bar.bottom) + 1; y < vh; y += 2) {
+        for (const x of [2, Math.round(vw / 2), vw - 3]) {
+          const el = document.elementFromPoint(x, y);
+          const covered = el !== null && (el === nav || nav.contains(el));
+          if (!covered) {
+            out.strip.uncovered.push(`${x}/${y}: ${el ? el.tagName + (el.id ? "#" + el.id : "") : "nichts"}`);
+          }
+        }
+      }
+      if (out.strip.uncovered.length) {
+        out.problems.push(
+          `unter der Leiste liegt nicht die Leiste: ${out.strip.uncovered.slice(0, 3).join(", ")}`,
+        );
       }
 
       // 5. Nothing horizontal.
@@ -217,10 +278,53 @@ async function inspect(page, { tabbar, touch, insets }) {
       // 7. Scroll to the end; the bar must not follow.
       const screen = document.querySelector("[data-tempo-scroll]");
       if (screen) screen.scrollTop = screen.scrollHeight;
+      out.scale = window.devicePixelRatio;
+      out.viewport = { width: vw, height: vh };
       return out;
     },
     { tabbar, touch, insets },
   );
+}
+
+/**
+ * What the screenshot actually shows below the tab bar.
+ *
+ * The DOM can be right and the paint still wrong, and the strip that was
+ * reported is a painting problem: the band under the bar showed the page
+ * ground instead of the bar's. So the reference colour is read from
+ * inside the bar — from its left edge, clear of the labels — and every
+ * row below the bar is compared against it.
+ */
+function inspectStrip(buffer, bar, scale) {
+  const image = decodePng(buffer);
+  const px = (value) => Math.round(value * scale);
+
+  const barSampleY = px(bar.top + (bar.height - INSETS_SAMPLE_GAP) / 2);
+  const reference = image.at(2, Math.min(barSampleY, image.height - 1));
+
+  const from = px(bar.bottom);
+  const rows = [];
+  for (let y = from + 1; y < image.height; y += 1) {
+    for (const x of [2, Math.round(image.width / 2), image.width - 3]) {
+      const colour = image.at(x, y);
+      if (distance(colour, reference) > COLOUR_TOLERANCE) {
+        rows.push(`y=${Math.round(y / scale)} ${hex(colour)} statt ${hex(reference)}`);
+        break;
+      }
+    }
+  }
+
+  const out = {
+    referenz: hex(reference),
+    zeilen: Math.max(0, image.height - from - 1),
+    abweichend: rows.length,
+  };
+  if (rows.length) {
+    out.problem =
+      `unter der Leiste ist ${rows.length}px anders gemalt als die Leiste ` +
+      `(${rows.slice(0, 2).join(", ")})`;
+  }
+  return out;
 }
 
 const report = [];
@@ -269,7 +373,12 @@ for (const mode of MODES) {
       result.problems.push(`Leiste wandert beim Scrollen: ${settled.bottom} statt ${settled.vh}`);
     }
 
-    await page.screenshot({ path: `${OUT}/${mode.name}-${name}.png` });
+    const shot = await page.screenshot({ path: `${OUT}/${mode.name}-${name}.png` });
+    if (result.bar) {
+      const painted = inspectStrip(shot, result.bar, result.scale ?? 1);
+      result.paint = painted;
+      if (painted.problem) result.problems.push(painted.problem);
+    }
     report.push({ mode: mode.name, name, ...result });
   }
   await close();
@@ -287,7 +396,16 @@ for (const entry of report) {
       ? "keine Leiste"
       : "";
   console.log(`\n── ${entry.name}`);
-  if (bar) console.log(`   ${bar}  Hülle ${entry.shell?.height}px ${entry.shell?.position}  Dokument scrollt: ${entry.bodyScrolls}`);
+  if (bar) {
+    console.log(
+      `   ${bar}  Hülle ${entry.shell?.top}–${entry.shell?.bottom} ${entry.shell?.position}  Dokument scrollt: ${entry.bodyScrolls}`,
+    );
+    if (entry.paint) {
+      console.log(
+        `   Streifen unter der Leiste: ${entry.paint.zeilen}px, davon ${entry.paint.abweichend}px anders als ${entry.paint.referenz}`,
+      );
+    }
+  }
   if (entry.small?.length) console.log(`   Tap-Ziele: ${entry.small.join(" · ")}`);
   if (entry.underIndicator?.length) console.log(`   Unter dem Home-Indicator: ${entry.underIndicator.join(" · ")}`);
   console.log(entry.problems.length ? `   ✗ ${entry.problems.join("; ")}` : "   ✓ Layout in Ordnung");
