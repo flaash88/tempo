@@ -923,3 +923,116 @@ Was hier nicht steht, ist nicht entschieden.
   Plan-Screen und schickt sie als Vorschlag an die API. Phase 6 ist der
   Kanal, nicht die Trainingsplanung — und das ist auch der Grund, warum
   eine Bestätigung überhaupt eine Bedeutung hat.
+
+---
+
+## Phase 7 — PWA
+
+### Gebaut gegen den echten Zustand, nicht gegen die Mockups
+
+- **Die Instanz zeigt derzeit fast nur „Im Aufbau" und „Veraltet".** Sieben
+  Aktivitäten, 76 Wellness-Tage in drei Blöcken, letzter Datenpunkt
+  03.06.2026 — damit ist jede Zeitreihen-Kennzahl unter ihrer
+  Mindesthistorie, und zwar mit `have = 0`, weil das aktuelle Fenster leer
+  ist. Genau dieser Zustand wurde beim Bauen angesehen, nicht der
+  Standardzustand der Vorlagen.
+- **Die Zustände 4 und 5 sind deshalb die ausgebauten.** „0 / 14 Nächten ·
+  verfügbar ab 23.09." mit dem letzten Datenpunkt darunter ist die
+  häufigste Kachel der App, nicht ihr Sonderfall.
+- **`tileState()` entscheidet das an genau einer Stelle.** Sechs Screens
+  können sich damit nicht darüber uneinig werden, wann eine Zahl gezeigt
+  wird und wann ihr Fortschritt.
+- **„Leer" und „Im Aufbau" bleiben getrennt.** Ohne jeden Datenpunkt ist
+  eine Kachel leer und bittet, eine Quelle zu verbinden; mit Daten
+  außerhalb des Fensters ist sie im Aufbau und bittet zu warten. Jemanden
+  aufzufordern, eine bereits verbundene Quelle zu verbinden, ist der
+  ärgerlichere der beiden Fehler.
+
+### Keine Schwelle im Frontend
+
+- **Alle Zahlen kommen aus `GET /api/thresholds`**, einmal je Sitzung in
+  einen Context geladen. Auch die Einheiten stehen dort („nights", „days",
+  „performances"); die deutschen Wörter dazu stehen im Frontend, weil
+  „42 Tagen" und „14 Nächten" eine Frage der Grammatik des Satzes sind und
+  nicht der Metrik-Engine.
+- **Ohne erreichbare Schwellen sagt ein Screen das**, statt eine Zahl zu
+  raten.
+
+### Zweimal stale-while-revalidate, aus zwei Gründen
+
+- **Der Service Worker** macht die App ohne Verbindung überhaupt
+  lauffähig. **Der Client-Cache** in `lib/api.ts` merkt sich zusätzlich den
+  Empfangszeitpunkt — ohne den kann ein Screen nicht sagen, von wann das
+  ist, was er zeigt, und ein Screen, der stillschweigend die Zahlen von
+  gestern zeigt, ist genau das, was dieses Projekt vermeiden soll.
+- **Ein Reload nach einer Änderung geht am Cache vorbei.** Er trägt
+  `Cache-Control: no-cache`, und die SWR-Route des Service Workers greift
+  nur ohne diesen Header. Ohne das zeigte der Plan nach „Bestätigen" den
+  Stand von davor — im Browser reproduziert, bevor es gefixt wurde.
+
+### `sw.js` und `manifest.webmanifest`
+
+- **`globIgnores` reicht nicht.** `vite-plugin-pwa` hängt das erzeugte
+  Manifest selbst an `additionalManifestEntries`, und `workbox-build`
+  wendet die **nach** allen `manifestTransforms` an — es lässt sich also
+  weder wegglobben noch wegtransformieren.
+- **Deshalb ist das Manifest eine statische Datei in `public/`** und die
+  Erzeugung im Plugin abgeschaltet. Kein Glob-Muster greift es, also
+  landet es nicht im Precache.
+- **Dazu `no-store` aus der API** für beide Dateien: der Precache ist nur
+  die eine Hälfte, der gewöhnliche HTTP-Cache die andere.
+- **Geprüft wird am gebauten Artefakt**, nicht an der Konfiguration — der
+  Weg ins Precache führte ja gerade an der Konfiguration vorbei.
+
+### Kleinigkeiten mit Gründen
+
+- **Ein Update übernimmt nicht von selbst** (`registerType: "prompt"`).
+  Die App unter dem Daumen auszutauschen, während jemand eine Zahl liest,
+  ist die eine Überraschung, die hier nicht passieren darf.
+- **`viewport-fit=cover`** ist die Voraussetzung dafür, dass
+  `env(safe-area-inset-*)` überhaupt etwas anderes als 0 liefert.
+- **Die App wird von der API unter `/` ausgeliefert.** Ein Ursprung heißt:
+  der Session-Cookie funktioniert ohne CORS, und der Service Worker deckt
+  mit seinem Scope alles ab, was er abdecken muss.
+- **Ein unbekannter `/api/…`-Pfad bleibt ein 404.** Der SPA-Fallback
+  antwortet dort nicht mit der HTML-Hülle — aus einem Tippfehler im Pfad
+  würde sonst ein Parse-Fehler im Client, der viel schwerer zu lesen ist.
+- **Wochen ohne Einheit werden nicht als zwölf Nullzeilen gezeigt.** Ein
+  Block aus Nullen ist keine Trainingshistorie, sondern deren Abwesenheit,
+  und ein Satz sagt das besser.
+
+---
+
+## Aus dem Deployment gelernt
+
+### `fit_files_pending` zählte das Falsche
+
+- **`data/fit/` ist kein Eingangskorb, sondern der Ablageort.**
+  `activity.fit_path` zeigt dorthin, und die Datei muss bleiben, damit sich
+  eine Aktivität später neu parsen lässt. Alles darin zu zählen hieß, jede
+  importierte Aktivität zu zählen — sieben Dateien, sieben Aktivitäten,
+  „7 ausstehend" auf einem Screen, auf dem nichts ausstand.
+- **Ausstehend ist jetzt, was auf keine Aktivität zeigt**: von Hand
+  hineingelegt, oder von einem Sync übrig, der nach dem Download
+  abgebrochen ist. Bei der laufenden Instanz sind das null.
+
+### Der Passwort-Hash und das `$`
+
+- **`tempo hash-password --write` schreibt ihn selbst**, escaped und in
+  einer Zeile, und lässt den Rest der Datei in Ruhe. Das Kopieren von Hand
+  ist dreimal gescheitert: der Hash besteht aus sechs mit `$` getrennten
+  Feldern, Compose liest `$65536` als Variable und ersetzt sie durch
+  nichts.
+- **Tempo versteht beide Schreibweisen.** Compose macht aus `$$` wieder
+  `$`, `uv run --env-file .env` nicht — verstünde die App nur eine Form,
+  verhielte sich dieselbe Datei je nach Startart anders. Weder Base64 noch
+  eine Dezimalzahl enthält ein `$`, das Zusammenfalten kann also keinen
+  gültigen Hash beschädigen.
+- **Der Cookie-Schlüssel wird aus der normalisierten Form abgeleitet**,
+  sonst meldete ein Neustart unter dem jeweils anderen Leser den Athleten
+  ab.
+- **Beim Start und beim Login wird der Hash geprüft und benannt.**
+  „Passwort falsch" ist eine Lüge, wenn der Hash nie vollständig angekommen
+  ist — und sie schickt den Athleten genau dorthin suchen, wo der Fehler
+  nicht ist. Der Login antwortet in dem Fall mit `503` und dem Satz
+  „TEMPO_PASSWORD_HASH unvollständig — $-Zeichen in .env verdoppeln".

@@ -34,7 +34,7 @@ App.
 
 ## Stand der Entwicklung
 
-Phase 6 von 7. Fertig: Gerüst, Datenmodell, Migrationen, CLI,
+Alle sieben Phasen stehen. Fertig: Gerüst, Datenmodell, Migrationen, CLI,
 `GET /health`, die Ingestion (FIT-Parser, intervals.icu-Client mit
 Wasserstand, optionaler Garmin-Connector) und die Metrik-Engine — TRIMP,
 GAP nach Minetti, rTSS und hrTSS, Zeit in Zone, CTL/ATL/Form, ACWR,
@@ -47,7 +47,8 @@ Zahl selbst vorhält. Dazu die KI-Schicht: aus den fertigen Kennzahlen
 entsteht ein Feature-Dokument unter 4 KB, Claude formuliert daraus Text,
 die Antwort wird gespeichert und wiederverwendet. Dazu der Rückkanal:
 bestätigte Einheiten gehen als Kalender-Events an intervals.icu, von wo
-Garmin sie auf die Uhr synchronisiert. Die PWA folgt in Phase 7.
+Garmin sie auf die Uhr synchronisiert. Und die PWA: sechs Screens, jeder
+in seinen sechs Zuständen, installierbar und offline lesbar.
 
 `tempo recompute --all` zeigt den aktuellen Stand direkt an:
 
@@ -119,13 +120,42 @@ den Default. Die Begründung steht in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 `TEMPO_PASSWORD_HASH` wird nicht von Hand geschrieben, sondern mit
-`tempo hash-password` erzeugt. Der Befehl fragt das Passwort zweimal ab,
-gibt die fertige Zeile aus und schreibt das Passwort nirgends hin:
+`tempo hash-password` erzeugt. Der Befehl fragt das Passwort zweimal ab und
+schreibt das Passwort nirgends hin. **Mit `--write` trägt er den Hash
+direkt in die `.env` ein** — richtig escaped und in einer Zeile:
 
 ```bash
-docker compose run --rm tempo tempo hash-password
-# Ausgabe: TEMPO_PASSWORD_HASH=scrypt$65536$8$1$… → nach .env kopieren
+docker compose run --rm -v "$PWD/.env:/app/.env" tempo \
+  tempo hash-password --write
 ```
+
+Das ist der empfohlene Weg. Ohne `--write` gibt der Befehl die Zeile nur
+aus, und dann gelten die Fallstricke unten — Kopieren von Hand ist
+dreimal daran gescheitert.
+
+### .env-Fallstricke
+
+Die Datei wird von Docker Compose gelesen, und Compose ist eigen:
+
+- **`$` verdoppeln.** Der Hash besteht aus sechs mit `$` getrennten
+  Feldern. Compose liest `$65536` als Variable und ersetzt sie durch
+  nichts — der Hash kommt abgeschnitten an und passt danach zu keinem
+  Passwort. `$$` ist die Escape-Form; `--write` schreibt sie automatisch,
+  und Tempo versteht beide Schreibweisen, damit dieselbe Datei auch unter
+  `uv run --env-file .env` funktioniert.
+- **Kein Leerzeichen um `=`.** `TEMPO_PASSWORD_HASH = scrypt$$…` setzt eine
+  Variable namens `TEMPO_PASSWORD_HASH ` mit einem führenden Leerzeichen im
+  Wert. Also `NAME=wert`, ohne Leerzeichen.
+- **Der Hash steht in einer Zeile.** Er ist rund hundert Zeichen lang;
+  bricht das Terminal ihn beim Kopieren um, ist er in zwei Zeilen
+  zerlegt und die zweite wird als eigene, kaputte Variable gelesen.
+- **Keine Anführungszeichen nötig.** Compose nimmt sie in den Wert auf.
+  (Tempo entfernt sie beim Lesen des Hashes wieder, aber verlassen sollte
+  man sich darauf bei den anderen Variablen nicht.)
+
+Ist der Hash trotzdem beschädigt, sagt Tempo es beim Start und beim Login
+im Klartext — `TEMPO_PASSWORD_HASH unvollständig — $-Zeichen in .env
+verdoppeln` — statt bloß „Passwort falsch".
 
 Starten und Schema anlegen:
 
@@ -330,15 +360,69 @@ Zeitstempel und Fehlergrund.
 fest, und eine geänderte Einheit ersetzt ihr Event per `PUT`, statt ein
 zweites daneben anzulegen.
 
+## Die App
+
+React + Vite + Tailwind v4, gebaut nach `design/tempo-tokens.css`. Sechs
+Screens — Heute, Trends, Plan, Coach, Mehr und das Aktivitätsdetail — und
+jede Kachel in dem Zustand, in dem ihre Kennzahl gerade ist: Wert,
+Ladezustand, leer, **im Aufbau**, **veraltet** oder Fehler.
+
+Die letzten beiden sind derzeit die einzigen, die man wirklich zu sehen
+bekommt, und sie sind entsprechend gebaut: „0 / 14 Nächten · verfügbar ab
+23.09." steht dort, wo sonst eine Zahl stünde, mit dem Datum des letzten
+Datenpunkts darunter. **Keine dieser Zahlen steht im Frontend.** Alle
+Schwellen und Mindesthistorien kommen aus `GET /api/thresholds`, die
+Fortschrittswerte aus der Konfidenz-Hülle der jeweiligen Kennzahl.
+
+### Installieren und offline
+
+`manifest.webmanifest`, `display: standalone`, Apple-Touch-Icon und
+Safe-Area-Insets: auf dem iPhone „Zum Home-Bildschirm" und die App läuft
+ohne Browser-Chrom, mit korrektem Abstand zu Notch und Home-Indicator.
+
+Der Service Worker (über `vite-plugin-pwa`) hält API-Antworten
+stale-while-revalidate vor: ohne Verbindung ist der letzte Stand lesbar,
+und **jeder Screen sagt, von wann er ist** — Banner mit Uhrzeit oben,
+Datum des letzten Datenpunkts an jeder Kachel. Ein Reload nach einer
+Änderung geht am Cache vorbei, damit nach „Bestätigen" nicht der Zustand
+davor stehen bleibt.
+
+`sw.js` und `manifest.webmanifest` werden **nie** gecacht — weder im
+Precache noch über HTTP-Header. Ein gecachter Service Worker lässt sich
+nicht mehr ersetzen, und ein gecachtes Manifest friert die
+Installationsabfrage ein. Ein Test liest das am gebauten Artefakt nach,
+nicht an der Konfiguration.
+
+Eine neue Version übernimmt nicht von selbst: sie wird angeboten, und der
+Athlet tippt darauf. Die App unter dem Daumen auszutauschen, während
+jemand eine Zahl liest, ist genau die Überraschung, die eine
+Trainingsapp nicht machen sollte.
+
+### Bauen
+
+```bash
+cd web
+npm ci
+npm run build      # nach web/dist/
+npm test           # vitest, liest u. a. den gebauten Service Worker
+```
+
+Im Container passiert das in einer eigenen Build-Stufe; das Laufzeit-Image
+enthält kein Node, nur die fertigen Dateien. Die API liefert sie unter `/`
+aus — ein Ursprung für App und API, damit der Session-Cookie ohne
+CORS-Geschichte funktioniert.
+
 ## Entwicklung
 
 ```bash
 uv sync
 uv run --env-file .env tempo init
-uv run --env-file .env tempo hash-password
+uv run --env-file .env tempo hash-password --write
 uv run --env-file .env tempo sync --full
 uv run --env-file .env tempo recompute --all
 uv run --env-file .env uvicorn tempo.api.app:app --reload
+
+cd web && npm run dev      # Frontend mit Proxy auf :8000
 
 uv run ruff check .
 uv run ruff format --check .
