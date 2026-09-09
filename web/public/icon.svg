@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Tempo">
+  <rect width="512" height="512" rx="112" fill="#161826"/>
+  <circle cx="256" cy="256" r="150" fill="none" stroke="#9184d9" stroke-width="24" stroke-linecap="round" stroke-dasharray="707" stroke-dashoffset="212" transform="rotate(-90 256 256)"/>
+  <path d="M256 152v112l72 44" fill="none" stroke="#e9e9ed" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

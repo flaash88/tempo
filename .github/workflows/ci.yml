@@ -40,8 +40,38 @@ jobs:
       - name: pytest
         run: uv run pytest
 
+  web:
+    name: frontend build · vitest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build
+        working-directory: web
+        run: npm run build
+
+      # After the build on purpose: the PWA tests read the built service
+      # worker, because the rule they check is about the artefact, not the
+      # configuration that was meant to produce it.
+      - name: vitest
+        working-directory: web
+        run: npm test
+
   docker:
-    name: docker build
+    name: docker build · die App ist erreichbar
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -66,3 +96,10 @@ jobs:
         run: |
           docker run --rm tempo:ci tempo --version
           docker run --rm tempo:ci python -c "import tempo.api.app"
+
+      # The check that was missing. `docker build` succeeding says nothing
+      # about whether the app is reachable: the frontend can be absent from
+      # the image and every other step still passes. This starts the
+      # container and asks for the app.
+      - name: The image serves the app
+        run: scripts/smoke-image.sh tempo:ci

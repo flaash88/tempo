@@ -186,8 +186,55 @@ def cmd_import_dir(args: argparse.Namespace, settings: Settings) -> int:
     return 0 if report.ok else 1
 
 
+# The variable the hash belongs to, and the only line --write touches.
+PASSWORD_HASH_VARIABLE = "TEMPO_PASSWORD_HASH"
+
+
+def compose_escaped(value: str) -> str:
+    """Escape a value so an env file survives Docker Compose.
+
+    Compose reads ``$name`` in an env file as a variable and substitutes it
+    away. The scrypt hash is six fields joined by ``$``, so pasted by hand
+    it arrives truncated — which then looks exactly like a wrong password.
+    Doubling the sign is Compose's documented escape, and Tempo understands
+    both forms, so the escaped line also works under ``--env-file``.
+    """
+    return value.replace("$", "$$")
+
+
+def write_env_value(path: Path, variable: str, value: str) -> bool:
+    """Set one variable in an env file. Returns True if a line was replaced.
+
+    The rest of the file is left exactly as it is — comments, order, blank
+    lines and every other variable. An env file is hand written, and a tool
+    that reformats one is a tool nobody runs twice.
+    """
+    line = f"{variable}={value}"
+    if not path.exists():
+        path.write_text(line + "\n", encoding="utf-8")
+        return False
+
+    existing = path.read_text(encoding="utf-8").splitlines()
+    replaced = False
+    for index, current in enumerate(existing):
+        if current.lstrip().startswith(f"{variable}="):
+            existing[index] = line
+            replaced = True
+            break
+    if not replaced:
+        existing.append(line)
+    path.write_text("\n".join(existing) + "\n", encoding="utf-8")
+    return replaced
+
+
 def cmd_hash_password(args: argparse.Namespace, settings: Settings) -> int:
-    """Derive a password hash for TEMPO_PASSWORD_HASH."""
+    """Derive a password hash for TEMPO_PASSWORD_HASH.
+
+    ``--write`` puts it straight into the env file, escaped. Copying the
+    hash by hand is the step that keeps failing: the ``$`` separators get
+    eaten by Compose, and a line break inserted by a terminal splits it in
+    two — both leave a hash that cannot match any password.
+    """
     password = getpass.getpass("Passwort: ")
     repeated = getpass.getpass("Passwort wiederholen: ")
     if password != repeated:
@@ -196,8 +243,25 @@ def cmd_hash_password(args: argparse.Namespace, settings: Settings) -> int:
     if not password:
         print("Das Passwort darf nicht leer sein.", file=sys.stderr)
         return 1
-    print("In .env eintragen:")
-    print(f"TEMPO_PASSWORD_HASH={hash_password(password)}")
+
+    encoded = hash_password(password)
+    if not getattr(args, "write", False):
+        print("In .env eintragen (die $-Zeichen verdoppeln, siehe README):")
+        print(f"{PASSWORD_HASH_VARIABLE}={compose_escaped(encoded)}")
+        return 0
+
+    target = Path(args.env_file)
+    try:
+        replaced = write_env_value(
+            target, PASSWORD_HASH_VARIABLE, compose_escaped(encoded)
+        )
+    except OSError as exc:
+        print(f"{target} konnte nicht geschrieben werden: {exc}", file=sys.stderr)
+        return 1
+
+    action = "ersetzt" if replaced else "ergänzt"
+    print(f"{PASSWORD_HASH_VARIABLE} in {target} {action}.")
+    print("Die $-Zeichen sind für Docker Compose verdoppelt — so gehört das.")
     return 0
 
 
@@ -248,6 +312,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     hash_cmd = sub.add_parser(
         "hash-password", help="Passwort-Hash für TEMPO_PASSWORD_HASH erzeugen"
+    )
+    hash_cmd.add_argument(
+        "--write",
+        action="store_true",
+        help="den Hash direkt in die .env schreiben, Compose-sicher escaped",
+    )
+    hash_cmd.add_argument(
+        "--env-file",
+        default=".env",
+        help="welche Datei --write beschreibt (Default: .env)",
     )
     hash_cmd.set_defaults(func=cmd_hash_password)
 

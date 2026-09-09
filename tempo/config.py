@@ -94,6 +94,11 @@ class Settings(BaseModel):
     # which is git-ignored and never read by tooling.
     data_dir: Path = Field(default=Path("data"))
 
+    # Where the built frontend is, when it is not in the usual place.
+    # Empty means "look in web/dist beneath the working directory", which
+    # is the same path in the container and in a checkout.
+    web_dir: Path | None = Field(default=None)
+
     # intervals.icu
     intervals_api_key: SecretStr = Field(default=SecretStr(""))
     intervals_athlete_id: str = Field(default="0")
@@ -167,6 +172,7 @@ def load_settings() -> Settings:
     """Build a settings object from the current environment."""
     return Settings(
         data_dir=Path(_env_str("TEMPO_DATA_DIR", "data")),
+        web_dir=(Path(raw) if (raw := _env_str("TEMPO_WEB_DIR")) else None),
         intervals_api_key=SecretStr(_env_str("INTERVALS_API_KEY")),
         intervals_athlete_id=_env_str("INTERVALS_ATHLETE_ID", "0") or "0",
         anthropic_api_key=SecretStr(_env_str("ANTHROPIC_API_KEY")),

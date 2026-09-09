@@ -1,5 +1,16 @@
 # syntax=docker/dockerfile:1
 
+# The frontend is built here and copied in below, so the runtime image
+# carries no node, no npm and no source — only the finished files.
+FROM node:22-slim AS web
+
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci
+COPY web/ ./
+RUN npm run build
+
+
 FROM python:3.12-slim AS base
 
 ENV PYTHONUNBUFFERED=1 \
@@ -22,6 +33,12 @@ COPY alembic.ini ./
 COPY tempo ./tempo
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
+
+# /app/web/dist, the same path the repository has, and the same one the
+# working directory makes findable in both. Deliberately not derived from
+# where the package gets installed: that depends on whether uv links or
+# copies it, and the app's reachability must not hang on that.
+COPY --from=web /web/dist ./web/dist
 
 # The data volume holds the database and the raw FIT files. It belongs to
 # the unprivileged user the service runs as.

@@ -485,6 +485,9 @@ class SettingsResponse(BaseModel):
     ai_usage: AiUsage
     garmin_direct_enabled: bool
     readiness_weights: dict[str, float]
+    # Files in the volume that no activity refers to — dropped in by hand,
+    # or left behind by a sync that failed after the download. Not a count
+    # of stored files: those all belong to an activity.
     fit_files_pending: int = 0
     sync: SyncStatusResponse
 

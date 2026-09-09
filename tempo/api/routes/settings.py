@@ -17,6 +17,7 @@ import logging
 from pathlib import Path
 
 from fastapi import APIRouter
+from sqlalchemy import Engine, select
 
 from tempo.api.auth import last4
 from tempo.api.deps import EngineDep, SessionDep, SettingsDep
@@ -29,7 +30,7 @@ from tempo.api.schemas import (
     ZoneBounds,
 )
 from tempo.config import Settings
-from tempo.db.models import AthleteSettings
+from tempo.db.models import Activity, AthleteSettings
 from tempo.db.session import session_scope
 from tempo.metrics.zones import pace_zones_from_threshold, zones_for_athlete
 from tempo.reports import build_usage_report
@@ -69,12 +70,36 @@ def _zone_bounds(
     )
 
 
-def _pending_fit_files(settings: Settings) -> int:
-    """How many raw files are waiting in the data volume's inbox."""
-    inbox: Path = settings.fit_dir
-    if not inbox.is_dir():
+def _pending_fit_files(settings: Settings, engine: Engine) -> int:
+    """How many raw files lie in the volume that no activity refers to.
+
+    ``data/fit/`` is not an inbox: it is where the downloaded files stay,
+    because ``activity.fit_path`` has to keep working long after the sync
+    that fetched them. Counting everything in it therefore counted every
+    imported activity — seven files, seven activities, "7 ausstehend" on a
+    screen where nothing was outstanding at all.
+
+    What is actually pending is a file nothing points at: dropped into the
+    volume by hand, or left behind by a sync that fetched it and then
+    failed before the activity row was written.
+    """
+    store: Path = settings.fit_dir
+    if not store.is_dir():
         return 0
-    return sum(1 for path in inbox.glob("*.fit") if path.is_file())
+
+    with session_scope(engine) as session:
+        referenced = {
+            path for path in session.scalars(select(Activity.fit_path)) if path
+        }
+
+    pending = 0
+    for path in store.glob("*.fit"):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(settings.data_dir).as_posix()
+        if relative not in referenced:
+            pending += 1
+    return pending
 
 
 def _build_response(
@@ -114,7 +139,7 @@ def _build_response(
         ),
         garmin_direct_enabled=settings.garmin_direct_enabled,
         readiness_weights=settings.readiness_weights.as_dict(),
-        fit_files_pending=_pending_fit_files(settings),
+        fit_files_pending=_pending_fit_files(settings, engine),
         sync=collect_status(engine),
     )
 

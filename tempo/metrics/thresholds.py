@@ -45,7 +45,7 @@ MINIMUM_HISTORY: Final[dict[str, MinimumHistory]] = {
         key="hrv_baseline",
         required=MIN_DAYS_HRV_BASELINE,
         unit="days",
-        label_de="HRV-Baseline",
+        label_de="HFV-Baseline",
     ),
     "form": MinimumHistory(
         key="form",
