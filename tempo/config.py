@@ -16,7 +16,16 @@ from typing import Final
 
 from pydantic import BaseModel, Field, SecretStr
 
+from tempo.metrics.thresholds import DEFAULT_READINESS_WEIGHTS, ReadinessWeights
+
 TRUE_VALUES: Final = frozenset({"1", "true", "yes", "on"})
+
+# Ceilings for the chat history, above which the configured values cannot
+# go. Twelve turns of a thousand characters is already more conversation
+# than the numbers behind it, and the whole history is capped in bytes on
+# top of this — see tempo.ai.prompts.
+MAX_CHAT_TURNS: Final = 12
+MAX_CHAT_MESSAGE_CHARS: Final = 2_000
 
 
 def _env_str(name: str, default: str = "") -> str:
@@ -38,6 +47,38 @@ def _env_float(name: str, default: float) -> float:
         return float(raw)
     except ValueError as exc:
         raise ValueError(f"{name} must be a number, got {raw!r}") from exc
+
+
+def _env_int(name: str, default: int, *, minimum: int, maximum: int) -> int:
+    """An integer from the environment, clamped to a range it may not leave.
+
+    The bounds are not advice. A configuration value that decides how much
+    text reaches a context window is a value that must not be settable to
+    anything, or the limit it belongs to stops being a limit.
+    """
+    raw = _env_str(name)
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a whole number, got {raw!r}") from exc
+    return max(minimum, min(value, maximum))
+
+
+def _env_readiness_weights() -> ReadinessWeights:
+    """Readiness weights from the environment, falling back per input.
+
+    Each weight is independent, so setting one does not force the other
+    three to be spelled out as well.
+    """
+    default = DEFAULT_READINESS_WEIGHTS
+    return ReadinessWeights(
+        hrv=_env_float("TEMPO_READINESS_WEIGHT_HRV", default.hrv),
+        resting_hr=_env_float("TEMPO_READINESS_WEIGHT_RESTING_HR", default.resting_hr),
+        sleep=_env_float("TEMPO_READINESS_WEIGHT_SLEEP", default.sleep),
+        tsb=_env_float("TEMPO_READINESS_WEIGHT_TSB", default.tsb),
+    )
 
 
 class Settings(BaseModel):
@@ -63,11 +104,25 @@ class Settings(BaseModel):
     anthropic_model_planning: str = Field(default="claude-opus-5")
     monthly_budget_eur: float = Field(default=10.0, ge=0.0)
 
+    # How much of a conversation travels with a chat question. Both are
+    # configuration because the right amount depends on what the athlete
+    # asks about; both are bounded because neither may become a way past
+    # the size limit on what the model is shown.
+    chat_max_turns: int = Field(default=6, ge=0, le=MAX_CHAT_TURNS)
+    chat_max_message_chars: int = Field(default=1_000, ge=80, le=MAX_CHAT_MESSAGE_CHARS)
+
     # Single-user authentication
     password_hash: SecretStr = Field(default=SecretStr(""))
 
+    # How much each input counts towards readiness. A choice rather than a
+    # derivation, so it is configuration; the documented default is
+    # DEFAULT_READINESS_WEIGHTS and only the ratios matter.
+    readiness_weights: ReadinessWeights = Field(default=DEFAULT_READINESS_WEIGHTS)
+
     # Optional Garmin direct connector, off unless explicitly enabled.
     garmin_direct_enabled: bool = Field(default=False)
+    garmin_email: str = Field(default="")
+    garmin_password: SecretStr = Field(default=SecretStr(""))
 
     @property
     def db_path(self) -> Path:
@@ -80,6 +135,20 @@ class Settings(BaseModel):
     @property
     def database_url(self) -> str:
         return f"sqlite+pysqlite:///{self.db_path}"
+
+    @property
+    def garmin_token_dir(self) -> Path:
+        """Where the Garmin session token is kept.
+
+        Inside the data volume, so a container restart does not force
+        another login — logging in repeatedly is itself a way to get
+        rate limited.
+        """
+        return self.data_dir / "garth"
+
+    @property
+    def has_garmin_credentials(self) -> bool:
+        return bool(self.garmin_email and self.garmin_password.get_secret_value())
 
     @property
     def has_intervals_credentials(self) -> bool:
@@ -106,8 +175,20 @@ def load_settings() -> Settings:
             _env_str("ANTHROPIC_MODEL_PLANNING") or "claude-opus-5"
         ),
         monthly_budget_eur=_env_float("TEMPO_MONTHLY_BUDGET_EUR", 10.0),
+        chat_max_turns=_env_int(
+            "TEMPO_CHAT_MAX_TURNS", 6, minimum=0, maximum=MAX_CHAT_TURNS
+        ),
+        chat_max_message_chars=_env_int(
+            "TEMPO_CHAT_MAX_MESSAGE_CHARS",
+            1_000,
+            minimum=80,
+            maximum=MAX_CHAT_MESSAGE_CHARS,
+        ),
         password_hash=SecretStr(_env_str("TEMPO_PASSWORD_HASH")),
+        readiness_weights=_env_readiness_weights(),
         garmin_direct_enabled=_env_bool("GARMIN_DIRECT_ENABLED", False),
+        garmin_email=_env_str("GARMIN_EMAIL"),
+        garmin_password=SecretStr(_env_str("GARMIN_PASSWORD")),
     )
 
 

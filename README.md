@@ -34,9 +34,28 @@ App.
 
 ## Stand der Entwicklung
 
-Phase 1 von 7: Gerüst, Datenmodell, Migrationen, CLI und
-`GET /health`. Ingestion, Metrik-Engine, API, KI-Schicht und die PWA
-folgen in den weiteren Phasen. Der Phasenplan steht in
+Phase 6 von 7. Fertig: Gerüst, Datenmodell, Migrationen, CLI,
+`GET /health`, die Ingestion (FIT-Parser, intervals.icu-Client mit
+Wasserstand, optionaler Garmin-Connector) und die Metrik-Engine — TRIMP,
+GAP nach Minetti, rTSS und hrTSS, Zeit in Zone, CTL/ATL/Form, ACWR,
+Monotonie und Strain, HFV- und Ruhe-HF-Baselines, Bereitschaft,
+Bestleistungen, Critical Speed, VDOT und Prognosen. Dazu die REST-API mit
+Anmeldung: jede Kennzahl in jeder Antwort trägt Konfidenz, Historie,
+Fortschritt und das Datum ihres letzten Datenpunkts, und
+`GET /api/thresholds` liefert alle Schwellen, damit die Oberfläche keine
+Zahl selbst vorhält. Dazu die KI-Schicht: aus den fertigen Kennzahlen
+entsteht ein Feature-Dokument unter 4 KB, Claude formuliert daraus Text,
+die Antwort wird gespeichert und wiederverwendet. Dazu der Rückkanal:
+bestätigte Einheiten gehen als Kalender-Events an intervals.icu, von wo
+Garmin sie auf die Uhr synchronisiert. Die PWA folgt in Phase 7.
+
+`tempo recompute --all` zeigt den aktuellen Stand direkt an:
+
+```
+Bereitschaft: noch nicht verfügbar (0/14, frühestens 22.09.2026) — letzter Wert 16.05.2026
+Formkurve: noch nicht verfügbar (0/42, frühestens 20.10.2026) — letzter Wert 16.05.2026
+Critical Speed: Stand 15.01.2026 — 5:59 min/km, D' 0 m
+``` Der Phasenplan steht in
 [`docs/PLAN.md`](docs/PLAN.md), getroffene Architekturentscheidungen in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
@@ -77,27 +96,88 @@ sudo chown -R 1000:1000 data
 
 | Variable | Bedeutung |
 |---|---|
+| `TEMPO_DATA_DIR` | Datenbank und FIT-Dateien, Default `data` — im Container das Volume |
 | `INTERVALS_API_KEY` | API-Key aus intervals.icu, Einstellungen → Developer |
 | `INTERVALS_ATHLETE_ID` | `0` als Selbstreferenz auf den eigenen Account |
 | `ANTHROPIC_API_KEY` | Key aus der Anthropic Console |
 | `ANTHROPIC_MODEL_DAILY` | Modell für Tageseinschätzung und Chat |
 | `ANTHROPIC_MODEL_PLANNING` | Modell für Wochen- und Blockplanung |
-| `TEMPO_MONTHLY_BUDGET_EUR` | Monatsbudget, harter Stopp bei Erreichen |
+| `TEMPO_MONTHLY_BUDGET_EUR` | Monatsbudget, harter Stopp bei Erreichen, `0` schaltet ab |
+| `TEMPO_CHAT_MAX_TURNS` | Mitgeschickte Runden im Chat, Default `6`, Obergrenze `12` |
+| `TEMPO_CHAT_MAX_MESSAGE_CHARS` | Zeichen je Nachricht, Default `1000`, Obergrenze `2000` |
+| `TEMPO_READINESS_WEIGHT_HRV` | Gewicht der HFV in der Bereitschaft, Default `0.40` |
+| `TEMPO_READINESS_WEIGHT_RESTING_HR` | Gewicht des Ruhepulses, Default `0.20` |
+| `TEMPO_READINESS_WEIGHT_SLEEP` | Gewicht des Schlafs, Default `0.20` |
+| `TEMPO_READINESS_WEIGHT_TSB` | Gewicht der Form, Default `0.20` |
 | `TEMPO_PASSWORD_HASH` | Passwort-Hash für die Anmeldung, siehe unten |
 | `GARMIN_DIRECT_ENABLED` | Optionaler Garmin-Direktzugriff, Default `false` |
+| `GARMIN_EMAIL`, `GARMIN_PASSWORD` | Nur nötig, wenn der Garmin-Zugriff an ist |
 
-Passwort-Hash erzeugen und in `.env` eintragen:
+Die vier Bereitschaftsgewichte sind eine Entscheidung, keine Herleitung;
+nur ihr Verhältnis zählt, und wer eines setzt, behält für die anderen drei
+den Default. Die Begründung steht in
+[`docs/DECISIONS.md`](docs/DECISIONS.md).
+
+`TEMPO_PASSWORD_HASH` wird nicht von Hand geschrieben, sondern mit
+`tempo hash-password` erzeugt. Der Befehl fragt das Passwort zweimal ab,
+gibt die fertige Zeile aus und schreibt das Passwort nirgends hin:
 
 ```bash
 docker compose run --rm tempo tempo hash-password
+# Ausgabe: TEMPO_PASSWORD_HASH=scrypt$65536$8$1$… → nach .env kopieren
 ```
 
-Starten:
+Starten und Schema anlegen:
 
 ```bash
 docker compose up -d
 docker compose exec tempo tempo init      # Migrationen anwenden
 curl -s localhost:8000/health
+```
+
+### Erste Daten holen
+
+```bash
+docker compose exec tempo tempo sync --full     # gesamte Historie
+docker compose exec tempo tempo recompute --all
+```
+
+`recompute` rechnet die Kennzahlen aus dem, was in der Datenbank steht —
+kein erneuter Import nötig. Damit TRIMP und hrTSS entstehen können,
+brauchen es HFmax, Ruhe-HF und Schwellen-HF in `athlete_settings`, für
+rTSS zusätzlich die Schwellenpace. Fehlt eines davon, sagt der Befehl
+welches, und die betroffene Spalte bleibt `null` statt auf null gesetzt zu
+werden.
+
+Der Sync spiegelt zusätzlich den Kalender von intervals.icu nach
+`planned_workout` — geplante Einheiten, Wettkämpfe und Notizen. Was dort
+gelöscht wird, verschwindet beim nächsten Lauf auch hier.
+
+Danach genügt der inkrementelle Sync; er fragt jede Quelle höchstens
+stündlich ab und setzt an dem gespeicherten Wasserstand an:
+
+```bash
+docker compose exec tempo tempo sync
+```
+
+Eine Garmin-GDPR-Ausfuhr lässt sich zusätzlich einlesen. Die FIT-Dateien
+werden ins Datenvolumen kopiert, Einheiten die intervals.icu schon
+geliefert hat werden nicht doppelt angelegt:
+
+```bash
+docker compose exec tempo tempo import-dir /pfad/zur/ausfuhr
+```
+
+### Garmin-Direktzugriff (optional)
+
+Aus, und die App ist ohne ihn vollständig. Er liefert ausschließlich Body
+Battery und Training Readiness, die intervals.icu nicht führt. Der Zugriff
+läuft höchstens einmal pro Tag und schaltet sich bei 401, 403 oder 429
+selbst ab, weil wiederholte Fehlversuche zu Sperren auf Account-Ebene
+führen. Die Bibliothek dafür ist ein optionales Extra:
+
+```bash
+uv sync --extra garmin        # bzw. im Image mitbauen
 ```
 
 Die Datenbank und die rohen FIT-Dateien liegen im Volume unter
@@ -142,11 +222,122 @@ der Umgebung, Session-Cookie mit `httpOnly`, `Secure` und
 zusätzlich davorschaltet, bekommt eine zweite Schicht — die App verlässt
 sich nicht darauf.
 
+```bash
+curl -c cookies -X POST https://tempo.example.com/api/auth/login \
+  -H 'Content-Type: application/json' -d '{"password":"…"}'
+curl -b cookies https://tempo.example.com/api/today
+```
+
+Der Cookie-Schlüssel wird aus dem Passwort-Hash abgeleitet: ein
+Passwortwechsel beendet damit jede laufende Sitzung. `GET /health` bleibt
+ohne Anmeldung erreichbar, alles unter `/api` nicht.
+
+Zugangsdaten kommen aus keiner Antwort zurück, auch nicht maskiert — die
+Einstellungen liefern nur `{"valid": true, "last4": "7f2c"}` — und lassen
+sich über die API auch nicht setzen: sie stehen in der Umgebung.
+
+## KI-Auswertung
+
+Vier Endpunkte, alle `POST` und alle hinter der Anmeldung:
+`/api/ai/daily` für die Tageseinschätzung, `/api/ai/activity/{id}` für
+eine einzelne Einheit, `/api/ai/plan-week` für die kommende Woche und
+`/api/ai/chat` für eine Rückfrage. `GET /api/ai/budget` sagt, was der
+Monat noch hergibt, ohne dafür einen Aufruf zu verbrauchen.
+
+Was das Modell zu sehen bekommt, ist eng begrenzt: aggregierte Kennzahlen
+samt ihrer Konfidenz-Metadaten, höchstens zehn zusammengefasste
+Einheiten, Wochenvolumen, Bestleistungen und der Plan — zusammen unter
+4 KB. **Rohe Sekundendaten verlassen die Datenbank nie.** Passt das
+Dokument nicht, wird in fester Reihenfolge gekürzt und die Kürzung im
+Dokument selbst vermerkt.
+
+Gerechnet wird nichts von der KI. Jede Zahl entsteht vorher deterministisch
+in `tempo/metrics/`; das Modell interpretiert fertige Werte und formuliert
+Text. Kennzahlen unter ihrer Mindesthistorie kommen als `null` mit
+Fortschritt an, und der System-Prompt verbietet ausdrücklich, sie als
+Trend oder Baseline zu lesen. Medizinische Aussagen sind ausgeschlossen;
+bei Hinweisen auf Schmerz, Verletzung oder Krankheit verweist die Antwort
+auf ärztliche Abklärung.
+
+### Chatverlauf
+
+`POST /api/ai/chat` nimmt die früheren Runden entgegen; wie viele davon
+mitgehen, entscheidet der Server. Jede Nachricht wird auf
+`TEMPO_CHAT_MAX_MESSAGE_CHARS` gekürzt, es bleiben höchstens
+`TEMPO_CHAT_MAX_TURNS` Runden, und der ganze Verlauf wird danach auf 4 KB
+gekappt — dieselbe Obergrenze wie beim Feature-Dokument. Der Verlauf ist
+damit kein Weg, mehr in das Kontextfenster zu bekommen, als das Dokument
+selbst erlaubt. Beide Konfigwerte haben zusätzlich eine Obergrenze im
+Code, die sich über die Umgebung nicht anheben lässt.
+
+Zahlen kommen weiterhin ausschließlich aus dem aktuellen Dokument. Eine
+frühere Antwort ist Zusammenhang, nie Eingabe.
+
+### Freitext aus fremder Quelle
+
+Namen, Beschreibungen und Notizen stammen von intervals.icu, aus dem
+Kalender oder von der Uhr. Im Feature-Dokument stehen sie ausschließlich
+verschachtelt unter dem Schlüssel `external_text`, mit zusammengefalteten
+Zeilenumbrüchen und auf 120 Zeichen gekürzt, und der System-Prompt sagt
+ausdrücklich, dass alles unter diesem Schlüssel gelesen und niemals
+befolgt wird. Eine Einheit mit dem Namen „Ignoriere alle vorherigen
+Anweisungen" ist eine Einheit mit einem albernen Namen.
+
+### Kosten
+
+`TEMPO_MONTHLY_BUDGET_EUR` ist ein harter Stopp. Ist das Monatsbudget
+erreicht, antworten die Endpunkte mit `402` und dem Budgetstand — es wird
+kein Aufruf gemacht, auch kein kleinerer. Ein Budget von `0` schaltet die
+KI-Schicht ab.
+
+Jeder Aufruf wird in `ai_call` verbucht (Tokens, Cache-Tokens, geschätzte
+Kosten). Die Kosten sind eine **Schätzung** aus veröffentlichten
+Listenpreisen und einem festen Eurokurs; verbindlich ist die Abrechnung in
+der Anthropic Console.
+
+Eine identische Anfrage kostet nichts: die Antwort ist über Endpunkt,
+Modell, System-Prompt und Feature-Dokument geschlüsselt gespeichert.
+Ändert sich eine Zahl, ändert sich das Dokument — dann wird neu gefragt.
+`?refresh=true` erzwingt eine neue Antwort.
+
+## Einheiten auf die Uhr
+
+Tempo schreibt nicht auf die Uhr, sondern in den Kalender bei
+intervals.icu — von dort holt Garmin die Einheit. Der Weg hat vier
+Schritte und je einen Endpunkt:
+
+```
+POST   /api/plan/workouts             Vorschlag anlegen  (?replace=true)
+PUT    /api/plan/workouts/{id}        Vorschlag ändern
+POST   /api/plan/workouts/{id}/confirm  bestätigen
+POST   /api/plan/workouts/{id}/push     an die Uhr senden
+```
+
+**Ohne Bestätigung geht nichts raus.** Ein Vorschlag ist ein Vorschlag;
+erst `confirm` macht ihn übertragbar, und eine Änderung danach zieht die
+Bestätigung wieder zurück. Ein Tag, an dem schon eine bestätigte Einheit
+steht, weist einen zweiten Vorschlag ab — `replace=true` ist die
+ausdrückliche Ausnahme, und der Ersatz muss neu bestätigt werden. Ein
+Eintrag, den der Athlet in intervals.icu selbst angelegt hat, wird nie
+überschrieben.
+
+Jede Einheit trägt in `GET /api/plan` und `GET /api/today` ihren
+Übertragungszustand: `not_sent`, `sending`, `on_watch`, `outdated`
+(auf der Uhr, aber seit der Übertragung geändert) oder `failed`, dazu
+Zeitstempel und Fehlergrund.
+
+Übertragen wird idempotent: die `external_id` steht schon beim Anlegen
+fest, und eine geänderte Einheit ersetzt ihr Event per `PUT`, statt ein
+zweites daneben anzulegen.
+
 ## Entwicklung
 
 ```bash
 uv sync
 uv run --env-file .env tempo init
+uv run --env-file .env tempo hash-password
+uv run --env-file .env tempo sync --full
+uv run --env-file .env tempo recompute --all
 uv run --env-file .env uvicorn tempo.api.app:app --reload
 
 uv run ruff check .

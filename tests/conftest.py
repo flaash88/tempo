@@ -8,6 +8,7 @@ no earlier value survives into a test.
 
 from __future__ import annotations
 
+import socket
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -30,7 +31,35 @@ _CLEARED_ENV = (
     "TEMPO_MONTHLY_BUDGET_EUR",
     "TEMPO_PASSWORD_HASH",
     "GARMIN_DIRECT_ENABLED",
+    "GARMIN_EMAIL",
+    "GARMIN_PASSWORD",
+    "TEMPO_READINESS_WEIGHT_HRV",
+    "TEMPO_READINESS_WEIGHT_RESTING_HR",
+    "TEMPO_READINESS_WEIGHT_SLEEP",
+    "TEMPO_READINESS_WEIGHT_TSB",
 )
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test may open a socket.
+
+    "Keine Live-Calls in Tests" is a rule of this project, and the reliable
+    way to keep one is to make it impossible rather than to remember it. A
+    mocked transport needs no socket, the ASGI test client speaks in process,
+    and SQLite is a file — so anything reaching for the network here is a
+    bug, and it fails loudly with the reason rather than timing out after a
+    minute of retries.
+    """
+
+    def refuse(*args: object, **kwargs: object) -> None:
+        raise RuntimeError(
+            "a test tried to open a network connection; mock the transport"
+        )
+
+    monkeypatch.setattr(socket.socket, "connect", refuse)
+    monkeypatch.setattr(socket.socket, "connect_ex", refuse)
+    monkeypatch.setattr(socket, "create_connection", refuse)
 
 
 @pytest.fixture

@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import datetime as dt
 from enum import StrEnum
+from typing import Any
 
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     Date,
     DateTime,
@@ -21,6 +23,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -34,6 +37,9 @@ class DataSource(StrEnum):
     FIT = "fit"
     GARMIN = "garmin"
     MANUAL = "manual"
+    # Generated here rather than mirrored from somewhere: a session Tempo
+    # proposed. The only kind that may be written back to the calendar.
+    TEMPO = "tempo"
 
 
 class SyncStatus(StrEnum):
@@ -44,6 +50,23 @@ class SyncStatus(StrEnum):
     PARTIAL = "partial"
     FAILED = "failed"
     DISABLED = "disabled"
+
+
+class WorkoutSyncStatus(StrEnum):
+    """How far a planned session has got towards the watch.
+
+    The four the design names, plus ``OUTDATED``: the mock-up has a state
+    for a session that is on the watch but has been changed since
+    ("Struktur geändert — Uhr hat noch die alte Version"), and without it
+    that case would have to pretend to be either "on the watch" or "not
+    transferred", both of which are wrong.
+    """
+
+    NOT_SENT = "not_sent"
+    SENDING = "sending"
+    ON_WATCH = "on_watch"
+    OUTDATED = "outdated"
+    FAILED = "failed"
 
 
 class ZoneModel(StrEnum):
@@ -153,11 +176,33 @@ class WellnessDay(Base):
 
     date: Mapped[dt.date] = mapped_column(Date, primary_key=True)
     resting_hr: Mapped[int | None] = mapped_column(Integer)
-    hrv_rmssd: Mapped[float | None] = mapped_column(Float)
+    # Heart rate variability, deliberately not named after a metric. Which
+    # measure this is depends on the source, so the source's own field name
+    # travels with the value in hrv_source_field and nothing downstream has
+    # to assume it is rMSSD. A change of that field breaks the baseline:
+    # comparing one measure against another would be meaningless.
+    hrv: Mapped[float | None] = mapped_column(Float)
+    hrv_source_field: Mapped[str | None] = mapped_column(String(32))
     sleep_secs: Mapped[int | None] = mapped_column(Integer)
     sleep_score: Mapped[int | None] = mapped_column(Integer)
     vo2max: Mapped[float | None] = mapped_column(Float)
     weight_kg: Mapped[float | None] = mapped_column(Float)
+    # Only the optional Garmin connector supplies these two; intervals.icu
+    # does not carry them. Both stay None when that connector is off.
+    body_battery: Mapped[int | None] = mapped_column(Integer)
+    training_readiness: Mapped[int | None] = mapped_column(Integer)
+    # How the day actually felt, as the athlete entered it. Stored on the
+    # source's own scale and, for now, read by nothing: these are the only
+    # way the readiness weights can later be calibrated against real
+    # perception rather than against each other. Any evaluation has to wait
+    # until the scale has been confirmed against a live account.
+    fatigue: Mapped[int | None] = mapped_column(Integer)
+    soreness: Mapped[int | None] = mapped_column(Integer)
+    mood: Mapped[int | None] = mapped_column(Integer)
+    # Where those three came from, kept apart from the row's own source: the
+    # athlete can enter how a day felt on a day whose measurements arrived
+    # from elsewhere, and then one source column has two answers.
+    subjective_source: Mapped[str | None] = mapped_column(String(16))
     source: Mapped[str] = mapped_column(
         String(16), nullable=False, default=DataSource.INTERVALS
     )
@@ -220,6 +265,9 @@ class AthleteSettings(Base):
     hr_rest: Mapped[int | None] = mapped_column(Integer)
     lthr: Mapped[int | None] = mapped_column(Integer)
     threshold_pace_s_per_km: Mapped[float | None] = mapped_column(Float)
+    # The athlete's own sleep target. None falls back to the documented
+    # default in tempo.metrics.thresholds.
+    sleep_target_s: Mapped[int | None] = mapped_column(Integer)
     zone_model: Mapped[str] = mapped_column(
         String(32), nullable=False, default=ZoneModel.FRIEL_RUN_LTHR
     )
@@ -243,9 +291,126 @@ class AiCall(Base):
     model: Mapped[str] = mapped_column(String(64), nullable=False)
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Cache reads and writes are billed differently from plain input, and a
+    # run of calls with zero cache reads is the only way to notice that the
+    # cached prefix is never being hit. Kept apart for both reasons.
+    cache_read_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cache_write_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     cost_eur: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
 
     __table_args__ = (Index("ix_ai_call_ts", "ts"),)
+
+
+class AiResponse(Base):
+    """A stored answer, so the same question is not paid for twice.
+
+    The key covers everything that went into the request: the endpoint, the
+    model, the system prompt and the feature document. Any change to a
+    number changes the document, and any change to the rules changes the
+    prompt, so a stale answer cannot be served — there is no expiry because
+    there is nothing for one to protect against.
+
+    The document is kept alongside the answer. Without it there is no way
+    to tell later what the model was actually looking at when it said what
+    it said.
+    """
+
+    __tablename__ = "ai_response"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    cache_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    endpoint: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow
+    )
+    as_of: Mapped[dt.date | None] = mapped_column(Date)
+    features_json: Mapped[str] = mapped_column(Text, nullable=False)
+    answer: Mapped[str] = mapped_column(Text, nullable=False)
+
+    __table_args__ = (
+        Index("ix_ai_response_endpoint_created", "endpoint", "created_at"),
+    )
+
+
+class PlannedWorkout(Base):
+    """A planned session, as the source's calendar has it.
+
+    Mirrors what ``GET /athlete/0/events`` returns, including entries whose
+    ``category`` is not a workout at all — that is what the column is for.
+
+    A row Tempo generated itself carries ``source = "tempo"`` and the
+    write-back bookkeeping: whether the athlete has confirmed it, how far
+    it has got towards the watch, and which event it became at the source.
+    A row the source owns keeps that bookkeeping empty and is never pushed
+    anywhere — it is already where it came from.
+    """
+
+    __tablename__ = "planned_workout"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    date: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    category: Mapped[str | None] = mapped_column(String(32))
+    sport: Mapped[str | None] = mapped_column(String(32))
+    name: Mapped[str | None] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text)
+    target_time_s: Mapped[int | None] = mapped_column(Integer)
+    target_dist_m: Mapped[float | None] = mapped_column(Float)
+    target_load: Mapped[float | None] = mapped_column(Float)
+    # The structured workout as the source describes it, stored verbatim.
+    workout_doc: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    # The idempotency key. Nullable, because an entry created in the
+    # source's own interface has none; SQLite allows repeated NULLs in a
+    # unique column, which is exactly what that case needs.
+    external_id: Mapped[str | None] = mapped_column(String(64))
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+    source: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=DataSource.INTERVALS
+    )
+
+    # --- write-back bookkeeping, phase 6 -------------------------------
+    # Nothing leaves for the calendar until the athlete has confirmed it,
+    # and a session that changes afterwards loses its confirmation: what
+    # was agreed to is a particular session, not a slot in the week.
+    confirmed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    sync_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=WorkoutSyncStatus.NOT_SENT
+    )
+    synced_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    # The event this became at the source, so a change updates it instead
+    # of creating a second one next to it.
+    remote_event_id: Mapped[str | None] = mapped_column(String(64))
+    # Why the last transfer failed, for the interface to show. Never a
+    # credential — see tempo.ingest for the redaction the client applies.
+    sync_error: Mapped[str | None] = mapped_column(Text)
+
+    __table_args__ = (
+        UniqueConstraint("external_id", name="uq_planned_workout_external_id"),
+        Index("ix_planned_workout_date", "date"),
+    )
+
+
+class SyncState(Base):
+    """The incremental sync watermark, one row per source.
+
+    Kept apart from ``sync_log``, which is a pure audit trail: this table is
+    the only thing the next run reads to decide where to resume. Activities
+    and wellness carry their own marks because either can fail on its own,
+    and a mark is only moved forward once its part has been processed **and
+    committed** — a half-imported window must be fetched again, not skipped.
+    """
+
+    __tablename__ = "sync_state"
+
+    source: Mapped[str] = mapped_column(String(16), primary_key=True)
+    # Naive local time, matching activity.start_local.
+    last_activity_start: Mapped[dt.datetime | None] = mapped_column(DateTime)
+    last_wellness_date: Mapped[dt.date | None] = mapped_column(Date)
+    last_success_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    # Opaque continuation token for sources that hand one out.
+    cursor: Mapped[str | None] = mapped_column(Text)
 
 
 class SyncLog(Base):

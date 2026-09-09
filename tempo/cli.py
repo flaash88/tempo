@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import logging
+import math
 import sys
 from pathlib import Path
 
@@ -17,13 +18,16 @@ from tempo.api.auth import hash_password
 from tempo.config import Settings, get_settings
 from tempo.db.migrate import current_revision, upgrade_to_head
 from tempo.db.session import engine_for, ensure_data_dirs
+from tempo.ingest.errors import IngestError
+from tempo.ingest.garmin_optional import sync_garmin
+from tempo.ingest.sync import import_fit_directory, sync_intervals
 from tempo.logging import configure_logging
+from tempo.metrics.confidence import MetricResult
+from tempo.metrics.wellness import Baseline
+from tempo.recompute import recompute_all
+from tempo.snapshot import Snapshot, build_snapshot, pace_of
 
 log = logging.getLogger("tempo.cli")
-
-# Exit code for a command whose phase has not been implemented yet. Distinct
-# from 1 so that scripts can tell "not built" apart from "failed".
-EXIT_NOT_IMPLEMENTED = 2
 
 
 def cmd_init(args: argparse.Namespace, settings: Settings) -> int:
@@ -42,22 +46,128 @@ def cmd_init(args: argparse.Namespace, settings: Settings) -> int:
 
 
 def cmd_sync(args: argparse.Namespace, settings: Settings) -> int:
-    """Fetch activities, streams and wellness from the configured sources."""
-    print(
-        "Sync ist noch nicht implementiert — kommt in Phase 2 (Ingestion).",
-        file=sys.stderr,
-    )
-    return EXIT_NOT_IMPLEMENTED
+    """Fetch activities, their FIT files and wellness from the sources."""
+    if not settings.has_intervals_credentials:
+        print(
+            "INTERVALS_API_KEY ist nicht gesetzt — siehe .env.example.",
+            file=sys.stderr,
+        )
+        return 1
+
+    engine = engine_for(settings)
+    try:
+        report = sync_intervals(engine, settings, full=args.full, force=args.force)
+        print(f"intervals.icu: {report.status} — {report.summary()}")
+
+        if settings.garmin_direct_enabled:
+            garmin = sync_garmin(engine, settings)
+            print(f"Garmin: {garmin.status} — {garmin.summary()}")
+    except IngestError as exc:
+        print(f"Sync fehlgeschlagen: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        engine.dispose()
+
+    return 0 if report.ok else 1
 
 
 def cmd_recompute(args: argparse.Namespace, settings: Settings) -> int:
-    """Recompute the derived metrics from the stored raw data."""
-    print(
-        "Neuberechnung ist noch nicht implementiert — kommt in Phase 3 "
-        "(Metrik-Engine).",
-        file=sys.stderr,
-    )
-    return EXIT_NOT_IMPLEMENTED
+    """Rebuild the derived tables from the stored raw data."""
+    engine = engine_for(settings)
+    try:
+        report = recompute_all(engine)
+        snapshot = build_snapshot(engine, weights=settings.readiness_weights)
+    finally:
+        engine.dispose()
+
+    print(report.summary())
+    for note in report.notes:
+        print(f"  Hinweis: {note}")
+    print(_render_snapshot(snapshot))
+    return 0
+
+
+def _render_metric(
+    label: str, result: MetricResult[object], rendered: str | None = None
+) -> str:
+    """One line per metric: the value, or how far along it is."""
+    if result.value is None:
+        line = f"{label}: noch nicht verfügbar ({result.have}/{result.required}"
+        if result.available_from is not None:
+            line += f", frühestens {result.available_from:%d.%m.%Y}"
+        line += ")"
+        if result.last_data_point is not None:
+            # In build-up *and* out of date: both apply per tile, and the
+            # date is what tells the athlete which of the two it is.
+            line += f" — letzter Wert {result.last_data_point:%d.%m.%Y}"
+    elif result.stale and result.last_data_point is not None:
+        # A stale value leads with its date; it is not the current state.
+        line = (
+            f"{label}: Stand {result.last_data_point:%d.%m.%Y} — "
+            f"{rendered or result.value}"
+        )
+    else:
+        line = (
+            f"{label}: {rendered or result.value} (Konfidenz {result.confidence:.2f})"
+        )
+    return line
+
+
+def _render_baseline(result: MetricResult[Baseline]) -> str | None:
+    """A baseline as its band, in the units it was built in."""
+    baseline = result.value
+    if baseline is None:
+        return None
+    if baseline.log_transformed:
+        low, high = math.exp(baseline.lower), math.exp(baseline.upper)
+        middle = math.exp(baseline.mean)
+    else:
+        low, high, middle = baseline.lower, baseline.upper, baseline.mean
+    return f"{middle:.1f} (Band {low:.1f} bis {high:.1f}, {baseline.days} Tage)"
+
+
+def _render_critical_speed(cs_m_s: float, d_prime_m: float) -> str:
+    pace = pace_of(cs_m_s)
+    if pace is None:
+        return f"{cs_m_s:.2f} m/s"
+    return f"{int(pace) // 60}:{int(pace) % 60:02d} min/km, D' {d_prime_m:.0f} m"
+
+
+def _render_snapshot(snapshot: Snapshot) -> str:
+    """The headline metrics, as the interface would show them."""
+    form = snapshot.form.value
+    critical = snapshot.critical_speed.value
+    rows = [
+        _render_metric("Bereitschaft", snapshot.readiness),
+        _render_metric(
+            "Formkurve",
+            snapshot.form,
+            None
+            if form is None
+            else f"CTL {form.ctl:.1f}, ATL {form.atl:.1f}, Form {form.tsb:+.1f}",
+        ),
+        _render_metric(
+            "ACWR",
+            snapshot.acwr,
+            None if snapshot.acwr.value is None else f"{snapshot.acwr.value:.2f}",
+        ),
+        _render_metric("HFV-Baseline", snapshot.hrv, _render_baseline(snapshot.hrv)),
+        _render_metric(
+            "Ruhe-HF-Baseline",
+            snapshot.resting_hr,
+            _render_baseline(snapshot.resting_hr),
+        ),
+        _render_metric(
+            "Critical Speed",
+            snapshot.critical_speed,
+            None
+            if critical is None
+            else _render_critical_speed(critical.cs_m_s, critical.d_prime_m),
+        ),
+    ]
+    if snapshot.hrv_source_field:
+        rows.append(f"HFV-Quellfeld: {snapshot.hrv_source_field}")
+    return "\n".join(rows)
 
 
 def cmd_import_dir(args: argparse.Namespace, settings: Settings) -> int:
@@ -66,11 +176,14 @@ def cmd_import_dir(args: argparse.Namespace, settings: Settings) -> int:
     if not path.is_dir():
         print(f"Kein Verzeichnis: {path}", file=sys.stderr)
         return 1
-    print(
-        "Import ist noch nicht implementiert — kommt in Phase 2 (FIT-Parser).",
-        file=sys.stderr,
-    )
-    return EXIT_NOT_IMPLEMENTED
+
+    engine = engine_for(settings)
+    try:
+        report = import_fit_directory(engine, settings, path)
+    finally:
+        engine.dispose()
+    print(f"Import: {report.status} — {report.summary()}")
+    return 0 if report.ok else 1
 
 
 def cmd_hash_password(args: argparse.Namespace, settings: Settings) -> int:
@@ -110,6 +223,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--full",
         action="store_true",
         help="Vollsync statt inkrementell ab dem Wasserstand",
+    )
+    sync.add_argument(
+        "--force",
+        action="store_true",
+        help="Auch dann synchronisieren, wenn die letzte Runde unter einer "
+        "Stunde her ist",
     )
     sync.set_defaults(func=cmd_sync)
 

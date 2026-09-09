@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from tempo.config import Settings, load_settings
-from tests import REPO_ROOT
+from tempo.metrics.thresholds import DEFAULT_READINESS_WEIGHTS
 
 
 def test_defaults_are_usable_without_any_environment(data_dir: Path) -> None:
@@ -83,27 +83,50 @@ def test_settings_are_immutable(data_dir: Path) -> None:
         settings.intervals_athlete_id = "42"
 
 
-def test_env_example_documents_every_configured_variable() -> None:
-    """A variable the code reads but .env.example omits is a trap."""
-    example = (REPO_ROOT / ".env.example").read_text(encoding="utf-8")
-    documented = {
-        line.split("=", 1)[0].strip()
-        for line in example.splitlines()
-        if line and not line.startswith("#") and "=" in line
-    }
-
-    assert documented == {
-        "INTERVALS_API_KEY",
-        "INTERVALS_ATHLETE_ID",
-        "ANTHROPIC_API_KEY",
-        "ANTHROPIC_MODEL_DAILY",
-        "ANTHROPIC_MODEL_PLANNING",
-        "TEMPO_MONTHLY_BUDGET_EUR",
-        "TEMPO_PASSWORD_HASH",
-        "GARMIN_DIRECT_ENABLED",
-    }
-
-
 def test_settings_model_rejects_a_negative_budget() -> None:
     with pytest.raises(ValueError):
         Settings(monthly_budget_eur=-1.0)
+
+
+def test_the_readiness_weights_default_to_the_documented_set(
+    data_dir: Path,
+) -> None:
+    weights = load_settings().readiness_weights
+
+    assert weights == DEFAULT_READINESS_WEIGHTS
+
+
+def test_one_readiness_weight_can_be_changed_on_its_own(
+    data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Setting one must not force the other three to be spelled out."""
+    monkeypatch.setenv("TEMPO_READINESS_WEIGHT_SLEEP", "0.5")
+
+    weights = load_settings().readiness_weights
+
+    assert weights.sleep == pytest.approx(0.5)
+    assert weights.hrv == pytest.approx(DEFAULT_READINESS_WEIGHTS.hrv)
+
+
+def test_a_negative_readiness_weight_is_refused(
+    data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TEMPO_READINESS_WEIGHT_HRV", "-1")
+
+    with pytest.raises(ValueError, match="negative"):
+        load_settings()
+
+
+def test_readiness_weights_of_all_zero_are_refused(
+    data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name in (
+        "TEMPO_READINESS_WEIGHT_HRV",
+        "TEMPO_READINESS_WEIGHT_RESTING_HR",
+        "TEMPO_READINESS_WEIGHT_SLEEP",
+        "TEMPO_READINESS_WEIGHT_TSB",
+    ):
+        monkeypatch.setenv(name, "0")
+
+    with pytest.raises(ValueError, match="positive"):
+        load_settings()

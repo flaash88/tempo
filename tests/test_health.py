@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from tempo import __version__
 from tempo.api.app import create_app
 from tempo.config import Settings
-from tempo.db.migrate import upgrade_to_head
+from tempo.db.migrate import head_revision, upgrade_to_head
 
 
 @pytest.fixture
@@ -39,7 +39,7 @@ def test_health_reports_the_applied_revision_after_init(
         body = client.get("/health").json()
 
     assert body["database"] == "ok"
-    assert body["schema_revision"] == "0001"
+    assert body["schema_revision"] == head_revision()
     assert body["version"] == __version__
 
 
