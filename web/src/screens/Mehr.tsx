@@ -214,8 +214,22 @@ export default function Mehr() {
       <Card>
         <TileHeader title="Aktivitäten" />
         <div className="mt-3">
-          <Link to="/activities" style={{ textDecoration: "none" }}>
+          <Link to="/activities" style={{ textDecoration: "none", display: "inline-flex" }}>
             <PrimaryButton>Alle Aktivitäten</PrimaryButton>
+          </Link>
+        </div>
+      </Card>
+
+      <Card>
+        <TileHeader title="Diagnose" />
+        <div className="mt-3 flex flex-col gap-3">
+          <p className="m-0 text-sub" style={{ color: "var(--t-ink-3)" }}>
+            Zeigt, was das Gerät über Anzeigemodus, Höhen und
+            Sicherheitsabstände meldet — für die Fehlersuche am Layout,
+            ohne am Telefon zu debuggen.
+          </p>
+          <Link to="/diagnose" style={{ textDecoration: "none", display: "inline-flex" }}>
+            <SecondaryButton>Gerätewerte anzeigen</SecondaryButton>
           </Link>
         </div>
       </Card>

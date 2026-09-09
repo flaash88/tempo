@@ -16,6 +16,7 @@ import Trends from "./screens/Trends";
 import Plan from "./screens/Plan";
 import Coach from "./screens/Coach";
 import Mehr from "./screens/Mehr";
+import Diagnose from "./screens/Diagnose";
 import Anmeldung from "./screens/Anmeldung";
 import { ActivityDetailScreen, ActivityListScreen } from "./screens/Aktivitaeten";
 import { useUpdatePrompt } from "./lib/updatePrompt";
@@ -81,6 +82,7 @@ export default function App() {
           <Route path="/plan" element={<Plan />} />
           <Route path="/coach" element={<Coach />} />
           <Route path="/more" element={<Mehr />} />
+          <Route path="/diagnose" element={<Diagnose />} />
           <Route path="/activities" element={<ActivityListScreen />} />
           <Route path="/activity/:id" element={<ActivityDetailScreen />} />
           <Route path="*" element={<Heute />} />
