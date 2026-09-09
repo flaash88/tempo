@@ -72,13 +72,26 @@
   --inset-right: env(safe-area-inset-right, 0px);
 }
 
-html,
-body,
-#root {
+/* The app shell is exactly one viewport tall and never scrolls itself.
+   Everything below depends on that.
+
+   In iOS Safari 100vh is taller than what you can see, and the difference
+   changes as you scroll — so the shell is 100dvh, with 100vh left in
+   front of it as the fallback for browsers that do not know dvh. The
+   dynamic unit is the one that tracks the visible area.
+
+   `overflow: hidden` here is what makes the scrolling happen *inside* the
+   screen rather than on the document. A fixed tab bar over a scrolling
+   body is precisely the arrangement iOS repositions during momentum
+   scrolling; over a body that cannot scroll it does not move at all. */
+html {
   height: 100%;
 }
 
 body {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   margin: 0;
   background: var(--t-bg);
   color: var(--t-ink);
@@ -88,6 +101,25 @@ body {
   -webkit-font-smoothing: antialiased;
   /* Nothing rubber-bands past the tab bar in standalone mode. */
   overscroll-behavior-y: none;
+}
+
+#root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  /* Without this a flex child with long content refuses to shrink, and
+     the scroll container inside it grows out of the shell again. */
+  min-height: 0;
+}
+
+/* The one scrolling element on any screen. */
+[data-tempo-scroll] {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  /* The rubber band stays inside the screen instead of dragging the whole
+     app away from the tab bar. */
+  overscroll-behavior-y: contain;
 }
 
 /* Digits are read in columns, so they align in columns. */

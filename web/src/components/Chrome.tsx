@@ -22,11 +22,17 @@ export function Screen({
   return (
     <div
       data-tempo-scroll
-      className="flex min-h-full flex-col gap-4 overflow-y-auto px-4"
+      // The height and the scrolling come from the [data-tempo-scroll]
+      // rule: this is the flex child that fills the shell, and it is the
+      // only thing on the screen that scrolls. It must not be a
+      // min-height box — one of those grows with its content, never
+      // scrolls itself, and hands the scrolling to the document, which is
+      // where iOS starts moving the fixed tab bar around.
+      className="flex flex-col gap-4"
       style={{
         paddingTop: "calc(var(--inset-top) + var(--sp-4))",
-        // Room for the tab bar plus the home indicator: the last tile must
-        // be reachable, not tucked underneath.
+        // The tab bar sits over this area, so the last tile needs room to
+        // clear it — bar, home indicator and a gap.
         paddingBottom: "calc(var(--tabbar-h) + var(--inset-bottom) + var(--sp-6))",
         paddingLeft: "calc(var(--inset-left) + var(--sp-4))",
         paddingRight: "calc(var(--inset-right) + var(--sp-4))",
@@ -181,12 +187,22 @@ export function TabBar() {
   return (
     <nav
       aria-label="Hauptnavigation"
+      // Anchored to the viewport, not to the content: the bar sits in the
+      // same place whether the screen below it is a full week of training
+      // or an empty plan. That holds because the document itself cannot
+      // scroll — see the shell rules in styles/index.css. A fixed bar over
+      // a scrolling body is the arrangement iOS moves around.
       className="fixed inset-x-0 bottom-0 z-10 flex justify-around"
       style={{
+        // The bar is one touch target tall, and the home indicator's strip
+        // is added below it as padding rather than taken out of it.
         height: "calc(var(--tabbar-h) + var(--inset-bottom))",
         paddingBottom: "var(--inset-bottom)",
+        paddingLeft: "var(--inset-left)",
+        paddingRight: "var(--inset-right)",
         background: "color-mix(in srgb, var(--t-bg-deep) 92%, transparent)",
         backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
         boxShadow: "inset 0 1px 0 0 var(--t-line)",
       }}
     >
@@ -197,7 +213,9 @@ export function TabBar() {
           end={tab.to === "/"}
           className="flex flex-1 flex-col items-center justify-center gap-1"
           style={({ isActive }) => ({
+            // The whole cell is the target, not just the glyph.
             minHeight: "var(--touch)",
+            height: "100%",
             color: isActive ? "var(--t-accent-ink)" : "var(--t-ink-3)",
             textDecoration: "none",
           })}

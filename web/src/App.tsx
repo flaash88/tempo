@@ -46,7 +46,7 @@ export default function App() {
 
   if (!checked) {
     return (
-      <div className="flex min-h-full items-center justify-center">
+      <div className="flex h-full items-center justify-center">
         <div className="shimmer h-10 w-40" style={{ borderRadius: "var(--r-md)" }} />
       </div>
     );

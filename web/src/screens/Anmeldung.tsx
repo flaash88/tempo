@@ -36,10 +36,14 @@ export default function Anmeldung({ onDone }: { onDone: () => void }) {
 
   return (
     <div
-      className="flex min-h-full flex-col justify-center gap-4 px-4"
+      data-tempo-scroll
+      className="flex flex-col justify-center gap-4 px-4"
       style={{
         paddingTop: "calc(var(--inset-top) + var(--sp-6))",
+        // No tab bar here, but the home indicator is still in the way.
         paddingBottom: "calc(var(--inset-bottom) + var(--sp-6))",
+        paddingLeft: "calc(var(--inset-left) + var(--sp-4))",
+        paddingRight: "calc(var(--inset-right) + var(--sp-4))",
       }}
     >
       <Card>
