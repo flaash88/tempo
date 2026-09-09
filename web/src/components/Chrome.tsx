@@ -31,9 +31,10 @@ export function Screen({
       className="flex flex-col gap-4"
       style={{
         paddingTop: "calc(var(--inset-top) + var(--sp-4))",
-        // The tab bar sits over this area, so the last tile needs room to
-        // clear it — bar, home indicator and a gap.
-        paddingBottom: "calc(var(--tabbar-h) + var(--inset-bottom) + var(--sp-6))",
+        // No room reserved for the tab bar any more: it is a sibling in
+        // normal flow below this box, not something floating over it.
+        // What is left is breathing room at the end of the list.
+        paddingBottom: "var(--sp-6)",
         paddingLeft: "calc(var(--inset-left) + var(--sp-4))",
         paddingRight: "calc(var(--inset-right) + var(--sp-4))",
       }}
@@ -187,12 +188,16 @@ export function TabBar() {
   return (
     <nav
       aria-label="Hauptnavigation"
-      // Anchored to the viewport, not to the content: the bar sits in the
-      // same place whether the screen below it is a full week of training
-      // or an empty plan. That holds because the document itself cannot
-      // scroll — see the shell rules in styles/index.css. A fixed bar over
-      // a scrolling body is the arrangement iOS moves around.
-      className="fixed inset-x-0 bottom-0 z-10 flex justify-around"
+      // Not positioned at all: the bar is the last child of the fixed
+      // shell, so it sits at its bottom because that is where the layout
+      // puts it. Nothing here resolves against a viewport.
+      //
+      // It used to be `fixed bottom-0`, which is the arrangement iOS
+      // standalone gets wrong — the coordinate is resolved against a
+      // viewport that does not match the visible area, and the bar creeps
+      // upwards. In a Safari tab the same markup was fine, which is
+      // exactly the difference that was reported.
+      className="z-10 flex shrink-0 justify-around"
       style={{
         // The bar is one touch target tall, and the home indicator's strip
         // is added below it as padding rather than taken out of it.
