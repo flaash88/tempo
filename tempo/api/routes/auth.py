@@ -18,6 +18,7 @@ from fastapi import APIRouter, Cookie, HTTPException, Response, status
 from tempo.api.auth import (
     SESSION_COOKIE,
     SESSION_LIFETIME,
+    hash_problem,
     issue_session,
     verify_password,
     verify_session,
@@ -55,6 +56,15 @@ def login(
         )
 
     stored = settings.password_hash.get_secret_value()
+    problem = hash_problem(stored)
+    if problem is not None:
+        # A hash that arrived truncated cannot match anything, and calling
+        # that "Passwort falsch" sends the athlete looking for the mistake
+        # in the one place it is not.
+        log.error("password hash unusable", extra={"reason": problem})
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=problem
+        )
     if not verify_password(payload.password, stored):
         log.info("login refused")
         raise HTTPException(

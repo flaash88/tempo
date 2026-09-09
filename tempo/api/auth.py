@@ -30,6 +30,63 @@ SCRYPT_P: Final = 1
 _MAXMEM: Final = 128 * SCRYPT_N * SCRYPT_R * 2
 
 
+# How many "$"-separated fields a well formed hash has: the algorithm, the
+# three cost parameters, the salt and the derived key.
+_HASH_FIELDS: Final = 6
+
+
+def normalise_hash(encoded: str) -> str:
+    """Undo the escaping a deployment may have needed to survive its file.
+
+    The hash is six fields joined by ``$``, and ``$`` is the one character
+    a value in an env file cannot carry unescaped: Docker Compose reads
+    ``$abc`` as a variable and substitutes it away, which silently truncates
+    the hash. Doubling the sign is the documented escape, and
+    ``tempo hash-password --write`` writes it that way.
+
+    Compose turns ``$$`` back into ``$`` before the process sees it, but
+    ``uv run --env-file .env`` does not — so the doubled form has to be
+    understood here as well, or the same file would work under one and fail
+    under the other. Neither base64 nor a decimal number ever contains a
+    ``$``, so collapsing them cannot corrupt a valid hash.
+
+    Surrounding quotes and whitespace go too: they are the other two ways a
+    hash arrives not quite as it was written.
+    """
+    cleaned = encoded.strip().strip("\"'")
+    return cleaned.replace("$$", "$")
+
+
+def hash_problem(encoded: str) -> str | None:
+    """Why the configured hash cannot work, in German, or ``None``.
+
+    Checked at start-up and named at the login, because "Passwort falsch"
+    is a lie when the hash never arrived intact — and it sends the athlete
+    looking for the mistake in the one place it is not.
+    """
+    if not encoded.strip():
+        return "TEMPO_PASSWORD_HASH ist nicht gesetzt"
+
+    normalised = normalise_hash(encoded)
+    parts = normalised.split("$")
+    if len(parts) != _HASH_FIELDS:
+        return "TEMPO_PASSWORD_HASH unvollständig — $-Zeichen in .env verdoppeln"
+    algorithm, raw_n, raw_r, raw_p, raw_salt, raw_hash = parts
+    if algorithm != ALGORITHM:
+        return f"TEMPO_PASSWORD_HASH nennt ein unbekanntes Verfahren: {algorithm}"
+    for raw in (raw_n, raw_r, raw_p):
+        if not raw.isdigit():
+            return "TEMPO_PASSWORD_HASH unvollständig — $-Zeichen in .env verdoppeln"
+    try:
+        salt = base64.b64decode(raw_salt, validate=True)
+        derived = base64.b64decode(raw_hash, validate=True)
+    except (ValueError, TypeError):
+        return "TEMPO_PASSWORD_HASH ist beschädigt — bitte neu erzeugen"
+    if len(salt) != SALT_BYTES or len(derived) != KEY_LENGTH:
+        return "TEMPO_PASSWORD_HASH ist beschädigt — bitte neu erzeugen"
+    return None
+
+
 def _derive(password: str, salt: bytes) -> bytes:
     return hashlib.scrypt(
         password.encode("utf-8"),
@@ -67,7 +124,9 @@ def verify_password(password: str, encoded: str) -> bool:
     unconfigured deployment must refuse the login, not leak a stack trace.
     """
     try:
-        algorithm, raw_n, raw_r, raw_p, raw_salt, raw_hash = encoded.split("$")
+        algorithm, raw_n, raw_r, raw_p, raw_salt, raw_hash = normalise_hash(
+            encoded
+        ).split("$")
         if algorithm != ALGORITHM:
             return False
         n, r, p = int(raw_n), int(raw_r), int(raw_p)
@@ -111,9 +170,15 @@ def _signing_key(password_hash: str) -> bytes:
     No separate secret to configure, and rotating the password invalidates
     every session — which is what changing a password is supposed to do.
     The hash never leaves the server and is not recoverable from the key.
+
+    Normalised first, so the same deployment does not get two different
+    keys depending on whether Compose or ``--env-file`` read the escaped
+    form — that would log the athlete out at every restart.
     """
     return hashlib.blake2b(
-        password_hash.encode("utf-8"), key=_KEY_CONTEXT, digest_size=_SIGNATURE_BYTES
+        normalise_hash(password_hash).encode("utf-8"),
+        key=_KEY_CONTEXT,
+        digest_size=_SIGNATURE_BYTES,
     ).digest()
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -9,6 +10,7 @@ from fastapi import FastAPI
 
 from tempo import __version__
 from tempo.ai.service import AiClientFactory, default_ai_client_factory
+from tempo.api.auth import hash_problem
 from tempo.api.routes import (
     activities,
     ai,
@@ -26,20 +28,37 @@ from tempo.api.routes import (
 from tempo.api.routes import (
     settings as settings_routes,
 )
+from tempo.api.static import mount_frontend
 from tempo.config import Settings, get_settings
 from tempo.db.session import engine_for
 from tempo.ingest.sync import ClientFactory, default_client_factory
 from tempo.logging import configure_logging
 
+log = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
+    _report_password_hash(settings)
     app.state.engine = engine_for(settings)
     try:
         yield
     finally:
         app.state.engine.dispose()
+
+
+def _report_password_hash(settings: Settings) -> None:
+    """Say at start-up what would otherwise only show up as a wrong password.
+
+    A hash truncated by an unescaped ``$`` in .env looks exactly like a
+    mistyped password at the login, which is the most misleading place for
+    it to surface. Logged once, on the way up, where a deployment is
+    actually watching.
+    """
+    problem = hash_problem(settings.password_hash.get_secret_value())
+    if problem is not None:
+        log.error("configuration problem", extra={"reason": problem})
 
 
 def create_app(
@@ -84,6 +103,9 @@ def create_app(
     app.include_router(wellness.router)
     app.include_router(workouts.router)
     app.include_router(ai.router)
+    # Last, because it claims "/": the API routes above have to match
+    # first, and everything left over is a route in the app itself.
+    app.state.frontend = mount_frontend(app)
     return app
 
 
