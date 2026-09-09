@@ -1,39 +1,61 @@
 /**
  * The layout audit: what only goes wrong on the device.
  *
- * Chromium is not iOS Safari, so this cannot reproduce the viewport
- * quirks themselves. What it can do is check the structural invariants
- * those quirks punish — and the one that produced the wandering tab bar
- * is right at the top: the document must not scroll. A fixed bar over a
- * scrolling body is the arrangement iOS repositions; over a body that
- * cannot scroll it stays put.
+ * Chromium is not iOS Safari, so this cannot reproduce WebKit's viewport
+ * arithmetic. What it can do is check the structural invariants that
+ * arithmetic punishes — and the first one is that the document must not
+ * scroll. A bar positioned against the viewport, over a scrolling
+ * document, is the arrangement iOS moves around.
  *
- * The safe-area insets are injected, because Chromium reports zero for
- * every env(safe-area-inset-*) and an audit on a device with no notch and
- * no home indicator would pass while the real one fails.
+ * Two modes, because the bug was visible in only one of them: the app was
+ * right in a Safari tab and wrong as an installed PWA.
+ *
+ * "Tab" is an ordinary page. "Standalone" is a real one: Chromium is
+ * launched with --app=, which makes (display-mode: standalone) genuinely
+ * match — CDP's Emulation.setEmulatedMedia does not emulate that feature,
+ * checked, it stays false — and the insets iOS reports for an installed
+ * app are injected on top, a 59px status bar and a 34px home indicator.
+ *
+ * What the standalone pass therefore catches is anything that depends on
+ * the display mode or on a non-zero bottom inset. What it cannot catch is
+ * WebKit's own viewport arithmetic, which is why the app carries a
+ * diagnosis screen that reports the device's real numbers.
  *
  * Run against a served build:
  *
  *   npx playwright install chromium      # once, if you have no browser
- *   node scripts/audit-layout.mjs        # expects the app on :8331
+ *   node web/scripts/audit-layout.mjs    # expects the app on :8331
  *
- * Playwright is deliberately not a dependency of this project: it is a
- * hundred megabytes for a tool that is run by hand when the layout
- * changes, not on every build.
+ * TEMPO_URL, TEMPO_SHOTS and PLAYWRIGHT_CHROMIUM override the defaults.
+ *
+ * Playwright is deliberately not a dependency of this project: a hundred
+ * megabytes for a tool run by hand when the layout changes is not worth
+ * carrying in every build.
  */
 
-import { mkdir } from "node:fs/promises";
+import { mkdir, mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { chromium } from "playwright";
 
 const BASE = process.env.TEMPO_URL ?? "http://127.0.0.1:8331";
-// iPhone 15 Pro, portrait, with the insets iOS actually reports in a
-// standalone PWA. Chromium's env(safe-area-inset-*) is always 0, so they
-// are injected — otherwise the audit would pass on a device that has no
-// notch and no home indicator, which is not the device this runs on.
-const INSETS = { top: 59, bottom: 34, left: 0, right: 0 };
+const PASSWORD = process.env.TEMPO_PASSWORD ?? "testpasswort";
+const OUT = process.env.TEMPO_SHOTS ?? "/tmp/tempo-layout";
+const VIEWPORT = { width: 393, height: 852 };
 const TABBAR = 49;
 const TOUCH = 44;
-const VIEWPORT = { width: 393, height: 852 };
+
+// What iOS reports in each mode on a notched iPhone. In a Safari tab the
+// bottom inset is zero while the toolbar is up; installed, the home
+// indicator's strip is there and nothing covers it.
+const MODES = [
+  { name: "Tab", standalone: false, insets: { top: 0, bottom: 0, left: 0, right: 0 } },
+  {
+    name: "Standalone",
+    standalone: true,
+    insets: { top: 59, bottom: 34, left: 0, right: 0 },
+  },
+];
 
 const SCREENS = [
   ["/", "Heute"],
@@ -41,154 +63,239 @@ const SCREENS = [
   ["/plan", "Plan"],
   ["/coach", "Coach"],
   ["/more", "Mehr"],
+  ["/diagnose", "Diagnose"],
   ["/activities", "Aktivitäten"],
 ];
 
-const OUT = process.env.TEMPO_SHOTS ?? "/tmp/tempo-layout";
+const insetCss = (insets) =>
+  `:root{--inset-top:${insets.top}px!important;--inset-bottom:${insets.bottom}px!important;` +
+  `--inset-left:${insets.left}px!important;--inset-right:${insets.right}px!important}`;
+
 await mkdir(OUT, { recursive: true });
 
-// PLAYWRIGHT_CHROMIUM lets an environment point at a browser it already
-// has, instead of downloading a second one.
-const browser = await chromium.launch(
-  process.env.PLAYWRIGHT_CHROMIUM
-    ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM }
-    : {},
-);
-const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
-const INSET_CSS = `:root{--inset-top:${INSETS.top}px!important;--inset-bottom:${INSETS.bottom}px!important;--inset-left:${INSETS.left}px!important;--inset-right:${INSETS.right}px!important}`;
-async function applyInsets(page) {
-  await page.addStyleTag({ content: INSET_CSS });
+const launchOptions = process.env.PLAYWRIGHT_CHROMIUM
+  ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM }
+  : {};
+
+/**
+ * A browsing context in the requested mode.
+ *
+ * Standalone needs its own browser: the app window is a launch flag, not
+ * a context option.
+ */
+async function openMode(mode) {
+  if (!mode.standalone) {
+    const browser = await chromium.launch(launchOptions);
+    const context = await browser.newContext({
+      viewport: VIEWPORT,
+      deviceScaleFactor: 2,
+      isMobile: true,
+      hasTouch: true,
+    });
+    return { page: await context.newPage(), close: () => browser.close() };
+  }
+
+  // Playwright's viewport emulation and --app= do not coexist: with a
+  // viewport set, the app window never opens and only about:blank is
+  // there. So the window is sized by the browser instead, and every
+  // assertion below is made against window.innerHeight rather than
+  // against a hard-coded height.
+  const profile = await mkdtemp(join(tmpdir(), "tempo-audit-"));
+  const context = await chromium.launchPersistentContext(profile, {
+    ...launchOptions,
+    args: [`--app=${BASE}/`, `--window-size=${VIEWPORT.width},${VIEWPORT.height}`],
+    viewport: null,
+    hasTouch: true,
+  });
+
+  const deadline = Date.now() + 10_000;
+  let page;
+  while (Date.now() < deadline) {
+    page = context.pages().find((candidate) => candidate.url().startsWith(BASE));
+    if (page) break;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  if (!page) throw new Error("das App-Fenster ist nicht aufgegangen");
+  return { page, close: () => context.close() };
 }
 
-const page = await context.newPage();
-const problems = [];
-page.on("pageerror", (e) => problems.push(`Konsole: ${e}`));
+/** Everything measured on one screen, in one mode. */
+async function inspect(page, { tabbar, touch, insets }) {
+  return page.evaluate(
+    ({ tabbar, touch, insets }) => {
+      const out = { problems: [] };
+      const vh = window.innerHeight;
+      const vw = window.innerWidth;
+      const doc = document.scrollingElement ?? document.documentElement;
 
-await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
-await applyInsets(page);
-if (await page.locator("#password").count()) {
-  // The login has no tab bar, so it is checked on its own terms: it must
-  // still not hand the scrolling to the document, and its one field and
-  // one button must clear the home indicator.
-  const login = await page.evaluate((insets) => {
-    const out = [];
-    const doc = document.scrollingElement;
-    if (doc.scrollHeight > doc.clientHeight + 1) out.push("Body scrollt");
-    if (doc.scrollWidth > window.innerWidth + 1) out.push("horizontaler Overflow");
-    const guard = window.innerHeight - insets.bottom;
-    for (const el of document.querySelectorAll("input, button")) {
-      const r = el.getBoundingClientRect();
-      if (r.height < 44 - 0.5) out.push(`${el.tagName} nur ${Math.round(r.height)}px`);
-      if (r.bottom > guard) out.push(`${el.tagName} unter dem Home-Indicator`);
-    }
-    return out;
-  }, INSETS);
-  console.log(`\n── Anmeldung`);
-  console.log(login.length ? `   ✗ ${login.join("; ")}` : "   ✓ Layout in Ordnung");
-  if (login.length) problems.push(`Anmeldung: ${login.join("; ")}`);
+      // 1. The document must not scroll. If it does, whatever sits at the
+      //    bottom is riding on a moving surface.
+      out.bodyScrolls = doc.scrollHeight > doc.clientHeight + 1;
+      if (out.bodyScrolls) {
+        out.problems.push(`Dokument scrollt (${doc.scrollHeight} > ${doc.clientHeight})`);
+      }
 
-  await page.fill("#password", "testpasswort");
-  await page.click("button[type=submit]");
-  await page.waitForTimeout(900);
+      // 2. Only the screen scrolls the layout. A form control with more
+      //    content than room — the diagnosis screen's JSON field — scrolls
+      //    its own contents and cannot move anything around it, so it is
+      //    not what this is looking for.
+      const scrollers = [...document.querySelectorAll("*")].filter((el) => {
+        const style = getComputedStyle(el);
+        return /(auto|scroll)/.test(style.overflowY) && el.scrollHeight > el.clientHeight + 1;
+      });
+      const layoutScrollers = scrollers.filter(
+        (el) => !el.matches("textarea, select, pre, code"),
+      );
+      out.scrollers = layoutScrollers.map(
+        (el) => el.tagName + (el.dataset.tempoScroll !== undefined ? "[screen]" : ""),
+      );
+      if (layoutScrollers.some((el) => el.dataset.tempoScroll === undefined)) {
+        out.problems.push("ein anderes Element als der Screen scrollt");
+      }
+
+      // 3. The shell fills the visible area, whatever the mode thinks that is.
+      const shell = document.getElementById("root");
+      const shellBox = shell.getBoundingClientRect();
+      out.shell = { height: Math.round(shellBox.height), position: getComputedStyle(shell).position };
+      if (Math.abs(shellBox.height - vh) > 1) {
+        out.problems.push(`Hülle ${Math.round(shellBox.height)} statt ${vh}`);
+      }
+
+      // 4. The bar sits on the bottom edge, whatever the content length.
+      const nav = document.querySelector("nav[aria-label='Hauptnavigation']");
+      if (!nav) {
+        out.noBar = true;
+        return out;
+      }
+      const bar = nav.getBoundingClientRect();
+      out.bar = {
+        top: Math.round(bar.top),
+        bottom: Math.round(bar.bottom),
+        height: Math.round(bar.height),
+        position: getComputedStyle(nav).position,
+      };
+      if (Math.abs(bar.bottom - vh) > 1) {
+        out.problems.push(`Leiste endet bei ${Math.round(bar.bottom)}, sichtbar bis ${vh}`);
+      }
+      if (Math.abs(bar.height - (tabbar + insets.bottom)) > 1) {
+        out.problems.push(`Leistenhöhe ${Math.round(bar.height)} statt ${tabbar + insets.bottom}`);
+      }
+      // The labels must clear the home indicator's strip.
+      const label = nav.querySelector("span");
+      if (label && label.getBoundingClientRect().bottom > vh - insets.bottom + 0.5) {
+        out.problems.push("Beschriftung ragt in den Home-Indicator");
+      }
+
+      // 5. Nothing horizontal.
+      if (doc.scrollWidth > vw + 1) {
+        out.problems.push(`horizontaler Overflow: ${doc.scrollWidth} > ${vw}`);
+      }
+
+      // 6. Tap targets, and nothing hiding under the home indicator.
+      const interactive = [...document.querySelectorAll("button, a, input, textarea, [role=tab]")];
+      const onScreen = interactive
+        .map((el) => ({ el, r: el.getBoundingClientRect() }))
+        .filter(({ r }) => r.width > 0 && r.top < vh);
+
+      out.small = onScreen
+        .filter(({ el }) => {
+          // A link that only wraps another target is tapped on the target.
+          const wrapsOnlyATarget =
+            el.children.length === 1 && el.children[0].matches("button, a, input, textarea");
+          return !wrapsOnlyATarget;
+        })
+        .filter(({ r }) => r.height < touch - 0.5)
+        .map(({ el, r }) => `${el.tagName} "${(el.textContent || "").trim().slice(0, 24)}" ${Math.round(r.height)}px`);
+      if (out.small.length) out.problems.push(`${out.small.length} Tap-Ziel(e) unter ${touch}pt`);
+
+      const guard = vh - insets.bottom;
+      out.underIndicator = onScreen
+        .filter(({ el, r }) => r.bottom > guard && !nav.contains(el))
+        .map(({ el, r }) => `${el.tagName} "${(el.textContent || "").trim().slice(0, 24)}" bis ${Math.round(r.bottom)}`);
+      if (out.underIndicator.length) out.problems.push("etwas liegt unter dem Home-Indicator");
+
+      // 7. Scroll to the end; the bar must not follow.
+      const screen = document.querySelector("[data-tempo-scroll]");
+      if (screen) screen.scrollTop = screen.scrollHeight;
+      return out;
+    },
+    { tabbar, touch, insets },
+  );
 }
 
 const report = [];
-for (const [route, name] of SCREENS) {
-  await page.goto(`${BASE}${route}`, { waitUntil: "networkidle" });
-  await applyInsets(page);
-  await page.waitForTimeout(500);
+for (const mode of MODES) {
+  const { page, close } = await openMode(mode);
+  page.on("pageerror", (error) =>
+    report.push({ mode: mode.name, name: "—", problems: [`Konsole: ${error}`] }),
+  );
 
-  const result = await page.evaluate(({ tabbar, touch, insets }) => {
-    const out = { problems: [] };
-    const vh = window.innerHeight;
-    const vw = window.innerWidth;
+  await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await page.addStyleTag({ content: insetCss(mode.insets) });
 
-    // 1. The document must not scroll. If it does, the tab bar is riding
-    //    on a moving body, which is the reported bug.
-    out.bodyScrolls = document.scrollingElement.scrollHeight > document.scrollingElement.clientHeight + 1;
-    if (out.bodyScrolls) out.problems.push(`Body scrollt (${document.scrollingElement.scrollHeight} > ${document.scrollingElement.clientHeight})`);
-
-    // 2. Exactly one scroll container, and it is the screen.
-    const scrollers = [...document.querySelectorAll("*")].filter((el) => {
-      const style = getComputedStyle(el);
-      return /(auto|scroll)/.test(style.overflowY) && el.scrollHeight > el.clientHeight + 1;
-    });
-    out.scrollers = scrollers.map((el) => el.tagName + (el.dataset.tempoScroll !== undefined ? "[screen]" : ""));
-    if (scrollers.some((el) => el.dataset.tempoScroll === undefined)) out.problems.push("ein anderes Element scrollt");
-
-    // 3. The bar sits on the bottom edge, whatever the content length.
-    const nav = document.querySelector("nav[aria-label='Hauptnavigation']");
-    if (!nav) { out.problems.push("keine Tab-Leiste"); return out; }
-    const bar = nav.getBoundingClientRect();
-    out.bar = { top: Math.round(bar.top), bottom: Math.round(bar.bottom), height: Math.round(bar.height) };
-    if (Math.abs(bar.bottom - vh) > 1) out.problems.push(`Leiste endet bei ${Math.round(bar.bottom)}, Viewport ${vh}`);
-    if (Math.abs(bar.height - (tabbar + insets.bottom)) > 1) out.problems.push(`Leistenhöhe ${Math.round(bar.height)} statt ${tabbar + insets.bottom}`);
-    if (getComputedStyle(nav).position !== "fixed") out.problems.push("Leiste nicht fixiert");
-
-    // 4. Nothing horizontal.
-    if (document.scrollingElement.scrollWidth > vw + 1) out.problems.push(`horizontaler Overflow: ${document.scrollingElement.scrollWidth} > ${vw}`);
-
-    // 5. Tap targets.
-    const interactive = [...document.querySelectorAll("button, a, input, textarea, [role=tab]")];
-    out.small = interactive
-      .filter((el) => {
-        const r = el.getBoundingClientRect();
-        // An element that only wraps another target is measured through
-        // its child: a link around a button is tapped on the button.
-        const wrapsOnlyATarget =
-          el.children.length === 1 &&
-          el.children[0].matches("button, a, input, textarea");
-        return r.width > 0 && r.top < vh && !wrapsOnlyATarget;
-      })
-      .map((el) => ({ el, r: el.getBoundingClientRect() }))
-      .filter(({ r }) => r.height < touch - 0.5)
-      .map(({ el, r }) => `${el.tagName}.${(el.className || "").toString().slice(0, 24)} "${(el.textContent || "").trim().slice(0, 24)}" ${Math.round(r.height)}px`);
-
-    // 6. Anything sitting under the home indicator, other than the bar.
-    const guard = vh - insets.bottom;
-    out.underIndicator = interactive
-      .map((el) => ({ el, r: el.getBoundingClientRect() }))
-      // Only what is on screen right now: an element below the fold has a
-      // rect past the viewport and is not under anything.
-      .filter(({ el, r }) => r.height > 0 && r.top < vh && r.bottom > guard && !nav.contains(el))
-      .map(({ el, r }) => `${el.tagName} "${(el.textContent || "").trim().slice(0, 24)}" bis ${Math.round(r.bottom)} (Grenze ${guard})`);
-
-    // 7. The last element of the scroller must be reachable above the bar.
-    const screen = document.querySelector("[data-tempo-scroll]");
-    if (screen) {
-      screen.scrollTop = screen.scrollHeight;
-      out.scrolledTo = Math.round(screen.scrollTop);
-    }
-    return out;
-  }, { tabbar: TABBAR, touch: TOUCH, insets: INSETS });
-
-  await page.waitForTimeout(200);
-  const afterScroll = await page.evaluate(() => {
-    const nav = document.querySelector("nav[aria-label='Hauptnavigation']");
-    const bar = nav.getBoundingClientRect();
-    return { bottom: Math.round(bar.bottom), vh: window.innerHeight };
-  });
-  if (Math.abs(afterScroll.bottom - afterScroll.vh) > 1) {
-    result.problems.push(`Leiste wandert beim Scrollen: ${afterScroll.bottom} statt ${afterScroll.vh}`);
+  // Confirm the mode is what it claims to be, rather than assuming it.
+  const reported = await page.evaluate(() =>
+    matchMedia("(display-mode: standalone)").matches,
+  );
+  if (reported !== mode.standalone) {
+    console.error(
+      `Modus ${mode.name}: display-mode meldet standalone=${reported}, erwartet ${mode.standalone}`,
+    );
+    process.exitCode = 1;
   }
 
-  await page.screenshot({ path: `${OUT}/${name}.png` });
-  report.push({ name, ...result });
+  if (await page.locator("#password").count()) {
+    await page.fill("#password", PASSWORD);
+    await page.click("button[type=submit]");
+    await page.waitForTimeout(900);
+  }
+
+  for (const [route, name] of SCREENS) {
+    await page.goto(`${BASE}${route}`, { waitUntil: "networkidle" });
+    await page.addStyleTag({ content: insetCss(mode.insets) });
+    await page.waitForTimeout(500);
+
+    const result = await inspect(page, { tabbar: TABBAR, touch: TOUCH, insets: mode.insets });
+
+    // After scrolling to the end, the bar must still be where it was.
+    await page.waitForTimeout(200);
+    const settled = await page.evaluate(() => {
+      const nav = document.querySelector("nav[aria-label='Hauptnavigation']");
+      return nav
+        ? { bottom: Math.round(nav.getBoundingClientRect().bottom), vh: window.innerHeight }
+        : null;
+    });
+    if (settled && Math.abs(settled.bottom - settled.vh) > 1) {
+      result.problems.push(`Leiste wandert beim Scrollen: ${settled.bottom} statt ${settled.vh}`);
+    }
+
+    await page.screenshot({ path: `${OUT}/${mode.name}-${name}.png` });
+    report.push({ mode: mode.name, name, ...result });
+  }
+  await close();
 }
 
-for (const r of report) {
-  console.log(`\n── ${r.name}`);
-  console.log(`   Leiste: ${JSON.stringify(r.bar)}  Body scrollt: ${r.bodyScrolls}  Scroller: ${r.scrollers?.join(",") || "keiner"}`);
-  if (r.small?.length) console.log(`   Tap-Ziele < 44: \n     ${r.small.join("\n     ")}`);
-  if (r.underIndicator?.length) console.log(`   Unter dem Home-Indicator: \n     ${r.underIndicator.join("\n     ")}`);
-  console.log(r.problems.length ? `   ✗ ${r.problems.join("; ")}` : "   ✓ Layout in Ordnung");
+let currentMode = null;
+for (const entry of report) {
+  if (entry.mode !== currentMode) {
+    currentMode = entry.mode;
+    console.log(`\n══ ${currentMode}`);
+  }
+  const bar = entry.bar
+    ? `Leiste ${entry.bar.top}–${entry.bar.bottom} (${entry.bar.height}px, ${entry.bar.position})`
+    : entry.noBar
+      ? "keine Leiste"
+      : "";
+  console.log(`\n── ${entry.name}`);
+  if (bar) console.log(`   ${bar}  Hülle ${entry.shell?.height}px ${entry.shell?.position}  Dokument scrollt: ${entry.bodyScrolls}`);
+  if (entry.small?.length) console.log(`   Tap-Ziele: ${entry.small.join(" · ")}`);
+  if (entry.underIndicator?.length) console.log(`   Unter dem Home-Indicator: ${entry.underIndicator.join(" · ")}`);
+  console.log(entry.problems.length ? `   ✗ ${entry.problems.join("; ")}` : "   ✓ Layout in Ordnung");
 }
-console.log(problems.length ? `\nKonsolenfehler: ${problems.join("; ")}` : "\nKeine Konsolenfehler");
-console.log(`Screenshots: ${OUT}`);
-await browser.close();
 
-const failed = report.filter((r) => r.problems.length).map((r) => r.name);
-if (failed.length || problems.length) {
-  console.error(`\nFehlerhaft: ${[...failed, ...problems].join(", ")}`);
+console.log(`\nScreenshots: ${OUT}`);
+const failed = report.filter((entry) => entry.problems.length);
+if (failed.length) {
+  console.error(`\nFehlerhaft: ${failed.map((entry) => `${entry.mode}/${entry.name}`).join(", ")}`);
   process.exit(1);
 }

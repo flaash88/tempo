@@ -20,11 +20,22 @@ import { Screen, TabBar } from "./components/Chrome";
 const css = readFileSync(resolve(__dirname, "styles/index.css"), "utf-8");
 
 describe("the app shell", () => {
-  it("is one dynamic viewport tall, with the static one as the fallback", () => {
+  it("is pinned rather than sized in viewport units", () => {
+    const root = css.slice(css.indexOf("#root {"), css.indexOf("[data-tempo-scroll] {"));
+
+    // The point of the whole exercise: a fixed box at inset 0 fills what
+    // the browser considers visible, and does not care what 100vh, 100dvh
+    // and height:100% mean in that mode. In iOS standalone they disagree,
+    // which is why the app was right in a tab and wrong when installed.
+    expect(root).toContain("position: fixed");
+    expect(root).toContain("inset: 0");
+  });
+
+  it("keeps the viewport units as the fallback, newest last", () => {
     const body = css.slice(css.indexOf("body {"), css.indexOf("#root {"));
 
-    // Order matters: a browser that does not know dvh keeps the vh above
-    // it, and one that does overrides it.
+    // A browser that does not know dvh keeps the vh above it; one that
+    // does overrides it.
     expect(body.indexOf("height: 100vh")).toBeGreaterThan(-1);
     expect(body.indexOf("height: 100dvh")).toBeGreaterThan(body.indexOf("height: 100vh"));
   });
@@ -64,9 +75,10 @@ describe("a screen", () => {
     expect(markup).not.toContain("min-h-screen");
   });
 
-  it("leaves room below its content for the bar and the home indicator", () => {
-    expect(markup).toContain("var(--tabbar-h)");
-    expect(markup).toContain("var(--inset-bottom)");
+  it("reserves no room for a bar that is not floating over it", () => {
+    // The bar is a sibling below this box now, so subtracting its height
+    // here would leave a second gap.
+    expect(markup).not.toContain("var(--tabbar-h)");
   });
 });
 
@@ -77,9 +89,18 @@ describe("the tab bar", () => {
     </MemoryRouter>,
   );
 
-  it("is anchored to the viewport, not to the content", () => {
-    expect(markup).toContain("fixed");
-    expect(markup).toContain("bottom-0");
+  it("is not positioned at all", () => {
+    // It is the last child of the fixed shell, so it sits at the bottom
+    // because the layout puts it there. Positioning it against the
+    // viewport is what iOS standalone gets wrong — the same markup was
+    // fine in a Safari tab, which is exactly the difference reported.
+    expect(markup).not.toContain("fixed");
+    expect(markup).not.toContain("bottom-0");
+    expect(markup).not.toContain("absolute");
+  });
+
+  it("does not shrink when the screen above it is long", () => {
+    expect(markup).toContain("shrink-0");
   });
 
   it("keeps its labels above the home indicator", () => {
