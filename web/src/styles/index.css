@@ -94,7 +94,16 @@ body {
   height: 100dvh;
   overflow: hidden;
   margin: 0;
-  background: var(--t-bg);
+  /* Not the page ground: the bar's. Nothing but body paints behind the
+     shell, so whatever the shell fails to cover shows this colour — and
+     the band that can go uncovered is the one under the tab bar, where
+     the bar's own ground is the right answer. Reported from the device:
+     a strip the height of the safe area below the bar, showing the page
+     through. If the shell ends early, this makes that band the bar's
+     colour instead of the page's.
+
+     The shell paints the page ground itself, so nothing inside changes. */
+  background: var(--t-bg-deep);
   color: var(--t-ink);
   font-family: var(--font-body);
   font-size: var(--fs-body);
@@ -107,6 +116,8 @@ body {
 #root {
   position: fixed;
   inset: 0;
+  /* The page ground lives here rather than on body — see above. */
+  background: var(--t-bg);
   display: flex;
   flex-direction: column;
   /* Without this a flex child with long content refuses to shrink, and
