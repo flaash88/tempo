@@ -1,5 +1,16 @@
 # syntax=docker/dockerfile:1
 
+# The frontend is built here and copied in below, so the runtime image
+# carries no node, no npm and no source — only the finished files.
+FROM node:22-slim AS web
+
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci
+COPY web/ ./
+RUN npm run build
+
+
 FROM python:3.12-slim AS base
 
 ENV PYTHONUNBUFFERED=1 \
@@ -20,6 +31,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 COPY alembic.ini ./
 COPY tempo ./tempo
+
+# Beside the package, where tempo.api.static looks for it first.
+COPY --from=web /web/dist ./tempo/web
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
 
