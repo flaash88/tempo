@@ -31,6 +31,18 @@ describe("the app shell", () => {
     expect(root).toContain("inset: 0");
   });
 
+  it("paints the page ground on the shell, and the bar's behind it", () => {
+    const body = css.slice(css.indexOf("body {"), css.indexOf("#root {"));
+    const root = css.slice(css.indexOf("#root {"), css.indexOf("[data-tempo-scroll] {"));
+
+    // Only body paints behind the shell, so whatever the shell fails to
+    // cover shows its colour. The band that can go uncovered is the one
+    // under the tab bar, where the bar's ground is the right answer —
+    // reported from the device as a strip showing the page through.
+    expect(body).toContain("background: var(--t-bg-deep)");
+    expect(root).toContain("background: var(--t-bg)");
+  });
+
   it("keeps the viewport units as the fallback, newest last", () => {
     const body = css.slice(css.indexOf("body {"), css.indexOf("#root {"));
 

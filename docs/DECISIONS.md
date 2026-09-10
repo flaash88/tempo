@@ -1209,3 +1209,49 @@ Was hier nicht steht, ist nicht entschieden.
 - **Ein scrollendes Textfeld ist kein Layout-Scroller.** Das Audit
   schlug auf dem JSON-Feld der Diagnose an; Formularelemente scrollen
   ihren eigenen Inhalt und können nichts um sich herum verschieben.
+
+### Der Streifen unter der Leiste
+
+- **Gemeldet:** die angeheftete Hülle endet vor dem physischen Rand, unter
+  der Leiste bleibt ein Streifen in Höhe der Safe Area, in dem der
+  Seitenhintergrund durchscheint.
+- **Doppelt angewendet wird der Inset nicht.** `--inset-bottom` steht an
+  genau einer Stelle im Layout: als Höhe *und* Polsterung der Leiste, was
+  eine Anwendung ist, nicht zwei. Die Hülle rechnet mit keinem Inset. Die
+  Hülle endet also tatsächlich zu früh.
+- **Nur `body` malte einen Grund.** `#root` und die Screens sind
+  durchsichtig; alles, was die Hülle nicht abdeckt, zeigte damit die
+  Seitenfarbe. Jetzt malt `#root` den Seitengrund und `body` den Grund der
+  Leiste — was die Hülle unten frei lässt, hat damit die Farbe der Leiste
+  und fällt nicht mehr auf. Innen ändert sich nichts.
+- **Das ist Farbe, keine Geometrie.** Wenn die Hülle am Gerät wirklich zu
+  früh endet, ist sie danach immer noch zu früh — nur sieht man es nicht
+  mehr. Deshalb bleiben beide Zahlen sichtbar: das Audit meldet sie
+  weiter als Fehler, und die Diagnose zeigt `huelle.streifenDarunter` und
+  sagt im Befundsatz ausdrücklich, dass der Streifen gefüllt, die Hülle
+  aber zu kurz ist. Einen Fehler zu verdecken, ohne ihn zu melden, wäre
+  die schlechtere Hälfte dieses Fixes.
+
+### Warum der bisherige Lauf grün war
+
+- **Die Prüfung endete vor der Stelle.** Sie verglich die *Höhe* der Hülle
+  mit `innerHeight` — eine Hülle mit richtiger Höhe, die 34 px zu hoch
+  sitzt, kommt damit durch. Jetzt werden Ober- **und** Unterkante geprüft.
+- **Und sie sah nur ins DOM.** Ein Kasten kann an der richtigen Stelle
+  liegen und nichts malen. Dazu kamen deshalb zwei Prüfungen:
+  `elementFromPoint` über den Streifen (liegt dort die Leiste oder
+  etwas anderes?) und ein Pixelvergleich des Screenshots gegen eine
+  Referenzfarbe aus der Leiste selbst.
+- **Der Pixelvergleich liest echte Pixel.** `web/scripts/png.mjs` ist ein
+  kleiner PNG-Leser — Signatur, IHDR, IDAT, `inflateSync`, die fünf
+  Zeilenfilter. Keine Abhängigkeit für eine Prüfung, die einmal im Jahr
+  läuft.
+- **In Chromium ist der Streifen null Pixel hoch**, die Prüfungen laufen
+  dort also leer — genau so konnte ein grüner Lauf neben einem Streifen
+  auf dem Gerät stehen. Deshalb `TEMPO_SIMULATE_STRIP=34`: es verkürzt die
+  Hülle absichtlich, und der Lauf muss rot werden. Eine Prüfung, die sich
+  nicht zum Fehlschlagen bringen lässt, ist keine.
+- **Nachgewiesen, in dieser Reihenfolge:** simuliert und ohne Fix →
+  `unter der Leiste ist 33px anders gemalt als die Leiste (y=819 #161826
+  statt #10111a)`; simuliert und mit Fix → `davon 0px anders`, Geometrie
+  weiter rot; ohne Simulation → 14 von 14 grün.

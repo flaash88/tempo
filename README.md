@@ -413,6 +413,11 @@ am Gerät auffällt: scrollt das Dokument (es darf nicht), gibt es genau
 einen Scroller, sitzt die Leiste am unteren Rand, horizontaler Overflow,
 Tap-Ziele unter 44 pt, Elemente unter dem Home-Indicator.
 
+Geprüft wird auch, was **gemalt** wird: der Streifen zwischen Unterkante
+Tab-Leiste und Bildschirmrand wird pixelweise gegen eine Referenzfarbe aus
+der Leiste verglichen. `TEMPO_SIMULATE_STRIP=34` verkürzt die Hülle
+absichtlich und muss den Lauf rot machen — sonst prüft die Prüfung nichts.
+
 WebKits eigene Viewport-Arithmetik kann Chromium nicht nachstellen. Dafür
 gibt es die Diagnose in der App: **Mehr → Diagnose** zeigt, was das Gerät
 über Anzeigemodus, Höhen, Sicherheitsabstände und die Lage der Tab-Leiste
