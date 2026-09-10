@@ -615,6 +615,40 @@ def test_plan_week_answers_with_a_day_per_day(
     assert body["text"] == recorder.text
 
 
+def test_the_calendar_and_the_proposal_speak_of_the_same_week(
+    client: TestClient, recorder: Recorder
+) -> None:
+    """The bug this replaced: header 07.09.-13.09., proposal 11.09.-17.09."""
+    recorder.text = week_plan_text()
+
+    calendar = client.get("/api/plan").json()
+    plan = client.post("/api/ai/plan-week").json()["plan"]
+
+    assert calendar["plan_week_from"] == plan["from_date"]
+    assert calendar["plan_week_to"] == plan["to_date"]
+    # And the window the interface can ask the calendar for is a real one.
+    week = client.get(
+        "/api/plan",
+        params={
+            "from_date": calendar["plan_week_from"],
+            "to_date": calendar["plan_week_to"],
+        },
+    ).json()
+    assert week["from_date"] == plan["from_date"]
+    assert week["to_date"] == plan["to_date"]
+
+
+def test_the_planned_week_runs_monday_to_sunday(client: TestClient) -> None:
+    calendar = client.get("/api/plan").json()
+
+    start = dt.date.fromisoformat(calendar["plan_week_from"])
+    end = dt.date.fromisoformat(calendar["plan_week_to"])
+    assert start.weekday() == 0
+    assert end.weekday() == 6
+    assert (end - start).days == 6
+    assert start >= today()
+
+
 def test_the_contract_travels_with_the_request(
     client: TestClient, recorder: Recorder
 ) -> None:

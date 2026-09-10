@@ -438,6 +438,13 @@ class PlanResponse(BaseModel):
     planned_load: float | None = None
     # Entries whose category is a target race rather than a session.
     races: list[PlannedWorkoutSummary] = Field(default_factory=list)
+    # The week POST /api/ai/plan-week would plan, whatever window this
+    # response covers. It travels here so the interface can show the
+    # calendar of the week it is about to have planned — and so the rule
+    # for which week that is lives in one place instead of being worked
+    # out again in JavaScript.
+    plan_week_from: dt.date
+    plan_week_to: dt.date
 
 
 # --- settings ----------------------------------------------------------
