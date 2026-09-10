@@ -126,6 +126,22 @@ body {
   overflow: hidden;
 }
 
+/* Bound to the visual viewport, once it has been measured.
+ *
+ * A fixed box is laid out against the layout viewport, and in an
+ * installed iOS PWA that is not what you see: zoom in and the two come
+ * apart, leaving content cut off at the top and a band below the tab bar.
+ * lib/visualViewport.ts writes these four values and sets the attribute;
+ * without it the rule above stands, which is right everywhere else.
+ */
+#root[data-vv] {
+  inset: auto;
+  top: var(--vv-top);
+  left: var(--vv-left);
+  width: var(--vv-width);
+  height: var(--vv-height);
+}
+
 /* The one scrolling element on any screen. Everything else in the shell —
    the tab bar — is a sibling in normal flow, so its position is a
    consequence of the layout rather than of a coordinate that has to be

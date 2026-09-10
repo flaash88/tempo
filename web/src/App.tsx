@@ -20,6 +20,7 @@ import Diagnose from "./screens/Diagnose";
 import Anmeldung from "./screens/Anmeldung";
 import { ActivityDetailScreen, ActivityListScreen } from "./screens/Aktivitaeten";
 import { useUpdatePrompt } from "./lib/updatePrompt";
+import { useVisualViewportShell } from "./lib/visualViewport";
 
 type SessionState = { authenticated: boolean; configured: boolean };
 
@@ -27,6 +28,10 @@ export default function App() {
   const [session, setSession] = useState<SessionState | null>(null);
   const [checked, setChecked] = useState(false);
   const { updateReady, applyUpdate } = useUpdatePrompt();
+  // The shell follows what is visible, not what is laid out. See
+  // lib/visualViewport.ts — without this, zooming in the installed app
+  // cuts the top off and leaves a band under the tab bar.
+  useVisualViewportShell();
 
   const check = useCallback(async () => {
     try {
@@ -64,7 +69,10 @@ export default function App() {
           <button
             type="button"
             onClick={applyUpdate}
-            className="fixed inset-x-4 z-20 px-3 py-2 text-sub"
+            // Absolute, not fixed: the shell is the containing block, so
+            // this rides with it instead of staying behind on the layout
+            // viewport when the two come apart.
+            className="absolute inset-x-4 z-20 px-3 py-2 text-sub"
             style={{
               top: "calc(var(--inset-top) + var(--sp-2))",
               borderRadius: "var(--r-md)",
