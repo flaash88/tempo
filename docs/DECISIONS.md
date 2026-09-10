@@ -1323,3 +1323,53 @@ Was hier nicht steht, ist nicht entschieden.
   die Zusicherung sich nicht mit sich selbst einig ist. Das prüft, dass
   die Hülle einem geschrumpften Viewport folgt — nicht, dass WebKit ihn
   schrumpft.
+
+### Über der Tastatur steht das Eingabefeld, nicht die Navigation
+
+- **Die Folge der Bindung, und sie war richtig erkannt:** die Hülle endet
+  an der Tastaturoberkante, die Leiste ist ihr letztes Kind, also stand
+  die Leiste über den Tasten. Technisch korrekt, inhaltlich falsch.
+- **Die Leiste tritt ab, solange etwas den unteren Rand verdeckt.** Das
+  gilt auf jedem Screen, nicht nur im Chat — Eingabefelder gibt es auch
+  im Plan-Formular und in der Diagnose; die Anmeldung hat ohnehin keine
+  Leiste. Die Einstellungen haben keine Felder.
+
+### Erkannt wird an der Geometrie, nicht am Fokus
+
+- **`keyboardInset = innerHeight − visualViewport.height × scale`.** Die
+  Multiplikation nimmt den Zoom heraus: bei Zoom 2 ist ein 426 px hoher
+  visueller Viewport die ganze Seite und verdeckt nichts. Ohne sie wäre
+  jeder Zoomvorgang eine Tastatur.
+- **Fokus-Ereignisse taugen dafür nicht.** Mit externer Tastatur ist ein
+  Feld fokussiert und nichts verdeckt den Bildschirm — die Leiste soll
+  bleiben. Der Diktier-Modus verdeckt den Bildschirm ohne eigenes
+  Fokus-Ereignis. Die Geometrie weiß es, die Ereignisse raten.
+- **Zwei Schwellen statt einer** (öffnen über 120, schließen unter 80).
+  Eine Tastatur, die durch die Grenze animiert, kann die Leiste damit
+  nicht flackern lassen; beide Werte liegen weit über jeder
+  Vorschlagsleiste und weit unter jeder Tastatur.
+
+### Das Eingabefeld wird angeheftet, nicht überlagert
+
+- **`Screen` bekommt eine Fußzeile**, die als Geschwister unter dem
+  Scrollbereich in der Hülle sitzt. Der Coach setzt sein Eingabefeld
+  dorthin: bei offener Tastatur steht es am unteren Rand des sichtbaren
+  Fensters, der Verlauf scrollt darüber.
+- **Weil es eigenen Platz einnimmt statt zu überlagern, kann nichts
+  darunter verschwinden.** Dieselbe Konstruktion wie bei der Tab-Leiste,
+  aus demselben Grund. Die Prüfung fragt zusätzlich nach, was an den
+  Punkten über und im Feld tatsächlich gemalt ist.
+- **Keine Safe-Area-Polsterung am Eingabefeld:** bei offener Tastatur
+  liegt der Home-Indicator hinter den Tasten, sonst trägt die Leiste
+  darunter den Abstand.
+
+### Die Prüfung deckt jetzt alle drei Zusagen ab
+
+- Leiste unsichtbar, Eingabefeld an der Unterkante des sichtbaren
+  Fensters, nichts darunter — auf **jedem** Screen mit Feld.
+- **Falsifiziert**, indem die Leiste versuchsweise stehen blieb:
+  `die Tab-Leiste steht noch über der Tastatur; Eingabefeld endet bei
+  483, sichtbar bis 532`. Genau die gemeldete Lage.
+- **Die Diagnose zeigt `tastaturHoehe` und `tastaturOffen`** neben den
+  Viewport-Zahlen, damit am Gerät nachvollziehbar ist, ob die Erkennung
+  greift.
