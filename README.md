@@ -413,6 +413,12 @@ am Gerät auffällt: scrollt das Dokument (es darf nicht), gibt es genau
 einen Scroller, sitzt die Leiste am unteren Rand, horizontaler Overflow,
 Tap-Ziele unter 44 pt, Elemente unter dem Home-Indicator.
 
+Gemessen wird bei **Zoom 1.0, 1.5 und 2.0** und mit simulierter Tastatur,
+jeweils gegen den **sichtbaren** Viewport — nicht gegen `innerHeight`.
+Sobald hineingezoomt wird, sind das zwei verschiedene Dinge, und die Hülle
+muss dem sichtbaren folgen. `TEMPO_DISABLE_VV=1` hebt die Bindung auf und
+muss den Lauf rot machen.
+
 Geprüft wird auch, was **gemalt** wird: der Streifen zwischen Unterkante
 Tab-Leiste und Bildschirmrand wird pixelweise gegen eine Referenzfarbe aus
 der Leiste verglichen. `TEMPO_SIMULATE_STRIP=34` verkürzt die Hülle

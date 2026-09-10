@@ -1255,3 +1255,71 @@ Was hier nicht steht, ist nicht entschieden.
   `unter der Leiste ist 33px anders gemalt als die Leiste (y=819 #161826
   statt #10111a)`; simuliert und mit Fix → `davon 0px anders`, Geometrie
   weiter rot; ohne Simulation → 14 von 14 grün.
+
+### Die Hülle folgt dem sichtbaren Viewport
+
+- **Der Befund, der es entschieden hat:** beim Hineinzoomen in der
+  installierten PWA wird oben Inhalt abgeschnitten und unten bleibt der
+  Streifen. Im Tab passiert beides nicht. Damit war klar, dass die
+  angeheftete Hülle dem **Layout-Viewport** folgt, während man den
+  **visuellen** sieht — und dass WebKit das im Standalone-Modus nicht
+  ausgleicht.
+- **Lokal reproduziert:** mit `Emulation.setPageScaleFactor` bei Zoom 2
+  ist `visualViewport.height` 426, `innerHeight` bleibt 852. Ohne Bindung
+  steht die Hülle dann auf `[-189, 852]` bei sichtbaren `[0, 426]` —
+  189 px oben abgeschnitten, der Rest unten hinaus. Genau die Meldung.
+- **`lib/visualViewport.ts` bindet die Hülle** an Offset, Breite und Höhe
+  des visuellen Viewports und führt bei jedem `resize` und `scroll`
+  darauf nach, eine Schreiboperation je Frame. Fehlt die API, passiert
+  nichts und die CSS-Regel mit `inset: 0` bleibt stehen — richtig für
+  jede andere Engine.
+- **`scale` wird gelesen, aber nicht auf die Box angewendet.**
+  `visualViewport.width`/`height` sind bereits CSS-Pixel des
+  Layout-Viewports; eine fixierte Box dieser Größe an diesem Offset deckt
+  exakt das Sichtbare. Der Maßstab steht in der Diagnose, weil er die
+  Zahl ist, die sagt, wie weit die beiden Viewports auseinander sind.
+- **Das Aktualisierungsband ist jetzt `absolute` statt `fixed`.** Die
+  Hülle ist sein umgebender Block, sonst bliebe es beim Zoomen auf dem
+  Layout-Viewport zurück.
+
+### Zoom bleibt erlaubt
+
+- **Zoom abzuschalten würde den Fehler nur verdecken.** Dieselbe
+  Abweichung zwischen Layout- und visuellem Viewport entsteht, sobald die
+  iOS-Tastatur im Coach-Screen aufgeht — die Bindung wird also ohnehin
+  gebraucht.
+- **`user-scalable=no` wäre zusätzlich unzuverlässig**, weil iOS es
+  teilweise ignoriert.
+- **Und es kostet Zugänglichkeit.** Vergrößern ist für manche Nutzer die
+  Voraussetzung, die App überhaupt zu lesen.
+- **Offener Punkt für später:** eine Schriftgrößen-Einstellung in der App,
+  damit Vergrößerung nicht allein am Pinch-Zoom hängt. Eigener PR, nicht
+  in diesem.
+
+### Die Prüfung endete wieder vor der Fehlerstelle
+
+- **Sie maß nur bei Zoom 1.0.** Bei 1.0 sind Layout- und visueller
+  Viewport identisch, der Fehler existiert dort nicht. Jetzt wird jeder
+  Screen bei 1.0, 1.5 und 2.0 gemessen.
+- **Und sie maß gegen `innerHeight`** — den Layout-Viewport, also genau
+  die Größe, der die Hülle fälschlich folgte. Eine Prüfung, die den
+  falschen Bezug benutzt, bestätigt den Fehler, statt ihn zu finden. Alle
+  Aussagen über die Unterkante gehen jetzt gegen
+  `offsetTop + visualViewport.height`.
+- **Falsifiziert:** `TEMPO_DISABLE_VV=1` hebt die Bindung per CSS wieder
+  auf, und die Zoomstufen werden rot. Der erste Versuch dafür entfernte
+  `window.visualViewport` — das nahm der Messung ihren eigenen Bezug und
+  meldete bei Zoom 2 fröhlich „Zoom 1". Eine Prüfung, die mit dem Feature
+  auch ihren Maßstab verliert, beweist nichts.
+- **Zwei Prüffehler kamen dabei heraus**, beide durch die Zoomstufen: der
+  horizontale Overflow wurde gegen die visuelle statt die Layout-Breite
+  geprüft (seitliches Verschieben ist beim Zoomen der Sinn der Sache),
+  und „liegt unter dem Home-Indicator" traf auch Elemente, die der
+  Screen unten wegschneidet oder die Leiste verdeckt. Jetzt wird gefragt,
+  was an der Stelle tatsächlich gemalt ist.
+- **Die Tastatur ist simuliert**, nicht echt: Chromium hat keine. Die
+  gemeldete Höhe des visuellen Viewports wird um 320 px verkleinert und
+  das Ereignis ausgelöst; geprüft wird gegen die eingespeiste Zahl, damit
+  die Zusicherung sich nicht mit sich selbst einig ist. Das prüft, dass
+  die Hülle einem geschrumpften Viewport folgt — nicht, dass WebKit ihn
+  schrumpft.
