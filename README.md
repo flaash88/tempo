@@ -297,7 +297,21 @@ JSON-Objekt: eine Begründung von höchstens drei Sätzen, sieben Tage mit
 Datum, Wochentag, Typ (Einheit oder Ruhetag), Dauer, Zielzone,
 Zielherzfrequenz und Zweck in je einem Satz, dazu die Einschränkungen der
 Datenlage als eigene Liste. Die Rohantwort des Modells steht weiter in
-`text`; der Plan-Screen zeigt sie als Rohfassung, nicht als Standardansicht.
+`text` und in der Datenbank; die Oberfläche zeigt sie nicht.
+
+**Geplant wird eine Kalenderwoche, Montag bis Sonntag** — die kommende,
+außer montags, wo die laufende noch ganz vor einem liegt. Kein rollendes
+Siebentagefenster: der Rest der App zählt in Montagswochen (`GET /api/plan`
+ohne Bereich, das Wochenvolumen in Trends), und ein Plan über zwei halbe
+Wochen ließe sich gegen keine davon prüfen. Kein Tag des Fensters liegt in
+der Vergangenheit, denn ein vergangener Tag lässt sich nicht übernehmen.
+
+`GET /api/plan` liefert dieses Fenster als `plan_week_from` /
+`plan_week_to` mit, unabhängig davon, welchen Zeitraum die Antwort selbst
+abdeckt. Damit steht die Regel an einer Stelle und wird nicht in
+JavaScript ein zweites Mal gerechnet; der Plan-Screen zeigt den Kalender
+der Woche, die er planen lässt, und zeichnet einen Vorschlag nie über
+einer anderen Woche.
 
 **Die Struktur wird erzwungen, nicht erbeten.** Der Server prüft, was
 zurückkommt: die sieben Daten müssen genau die des Planfensters sein, die

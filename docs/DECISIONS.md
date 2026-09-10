@@ -1466,3 +1466,80 @@ danach zurückgenommen.
 - **Die Diagnose zeigt `tastaturHoehe` und `tastaturOffen`** neben den
   Viewport-Zahlen, damit am Gerät nachvollziehbar ist, ob die Erkennung
   greift.
+
+---
+
+## Welche Woche geplant wird — und dass der Kalender sie zeigt
+
+Am Gerät stand „07.09. – 13.09." in der Kopfzeile über einem Vorschlag für
+„11.09. – 17.09.". Zwei Fenster auf einem Screen, die sich widersprechen.
+
+**Entschieden: die nächste volle Kalenderwoche, Montag bis Sonntag.**
+
+- **Der Rest der App zählt in Montagswochen.** `GET /api/plan` ohne
+  Bereich liefert Mo–So, das Wochenvolumen in Trends ist eine
+  Kalenderwoche. Ein rollendes Siebentagefenster liegt quer zu beiden, und
+  „Halte die Wochenlast im Rahmen der bisherigen Belastung" wäre gegen
+  nichts prüfbar, was die App tatsächlich rechnet.
+- **Das angezeigte Fenster zu planen wäre schlechter.** An einem
+  Donnerstag liegen vier seiner Tage in der Vergangenheit, und `adopt`
+  weist vergangene Tage ab — der halbe Plan ließe sich nicht übernehmen.
+- **Montags wird die laufende Woche geplant**, nicht die übernächste: sie
+  liegt noch ganz vor einem, und sie zu überspringen hieße acht Tage im
+  Voraus zu planen.
+- **Kein Tag des Fensters liegt je in der Vergangenheit.** Ein Test geht
+  dafür alle sieben Wochentage durch.
+
+Die Regel steht in `plan_window()` und nirgendwo sonst. `GET /api/plan`
+liefert das Fenster als `plan_week_from` / `plan_week_to` mit, damit das
+Frontend es nicht ein zweites Mal in JavaScript rechnet — genau diese
+Doppelrechnung war der Fehler.
+
+**Und der Kalender folgt.** Beim Planen wechselt die Ansicht auf die
+geplante Woche, erst auf das angekündigte Fenster, dann auf das, das die
+Antwort wirklich trägt. Ein Wochenschalter führt zurück; schaltet man
+dorthin, verschwindet der Vorschlag und an seiner Stelle steht eine Zeile
+mit der Woche, für die er gilt, und ein Weg zurück. Ein Vorschlag wird nie
+über einer anderen Woche gezeichnet — `sameWindow()` entscheidet das, und
+der gemeldete Fall (07.–13. über 11.–17.) ist einer seiner Tests.
+
+## Was die Typ-Badge kodiert
+
+Sie trug die Zonenfarbe, also hatten zwei Tage desselben Typs „Einheit"
+zwei verschiedene Farben. Eine Badge, die die Farbe wechselt, sieht aus,
+als bedeutete sie etwas — diese bedeutete nichts.
+
+Jetzt: die Badge unterscheidet nur Einheit von Ruhetag, und zwar über
+Fläche und Kontur statt über einen Farbton. Die Zonenfarbe steht an der
+Zonenangabe, kommt aus der Zonenpalette in `tempo-tokens.css` und sonst
+nirgendwoher. Statusfarben kommen im Plan nicht vor: ein Dienstag ist
+leicht oder schwer, nicht gut oder schlecht. Tests halten beides fest.
+
+## Lange Titel brechen um
+
+„Langer ruhiger Dauerlauf mit Geha…" ist der Name einer Einheit, den man
+nicht lesen kann. Zwei Zeilen statt Auslassungspunkte.
+
+## Die Rohfassung ist weg
+
+Sie war als Nachvollziehbarkeit gedacht und im Betrieb Ballast. Sie kommt
+auch nicht auf den Diagnose-Screen: der berichtet, was das Gerät über sein
+Layout weiß, nicht was das Modell geschrieben hat — und eine
+Debug-Ansicht, die niemand aufruft, ist trotzdem Code. Verloren ist nichts:
+die Antwort steht weiterhin im Feld `text` der API und in `ai_response`.
+
+## Nicht reproduziert: die doppelte Wochenaktion
+
+Gemeldet war „Ganze Woche übernehmen" zweimal, über und unter der
+Tagesliste. Im DOM steht genau eine, geprüft in vier Zuständen (frischer
+Vorschlag, nach einem übernommenen Tag, nach einem zweiten Vorschlag,
+ganz nach unten gescrollt) mit ausgelesenen Beschriftungen aller Buttons.
+
+Plausibel ist, was tatsächlich dastand: unter der Liste folgten kurz
+hintereinander zwei gleich aussehende Wochen-Buttons — „Ganze Woche
+übernehmen" und „Woche neu planen lassen", beide voll breit und outlined.
+Das ist behoben: die Übernahme ist jetzt die Primäraktion direkt unter der
+Liste, das Neuplanen eine Sekundäraktion ganz unten. Ein Test hält fest,
+dass die Beschriftung genau einmal vorkommt und hinter dem letzten Tag
+steht.
+
