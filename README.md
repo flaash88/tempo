@@ -290,6 +290,31 @@ Trend oder Baseline zu lesen. Medizinische Aussagen sind ausgeschlossen;
 bei Hinweisen auf Schmerz, Verletzung oder Krankheit verweist die Antwort
 auf ärztliche Abklärung.
 
+### Der Wochenplan kommt strukturiert
+
+`POST /api/ai/plan-week` antwortet nicht mit Prosa, sondern mit einem
+JSON-Objekt: eine Begründung von höchstens drei Sätzen, sieben Tage mit
+Datum, Wochentag, Typ (Einheit oder Ruhetag), Dauer, Zielzone,
+Zielherzfrequenz und Zweck in je einem Satz, dazu die Einschränkungen der
+Datenlage als eigene Liste. Die Rohantwort des Modells steht weiter in
+`text`; der Plan-Screen zeigt sie als Rohfassung, nicht als Standardansicht.
+
+**Die Struktur wird erzwungen, nicht erbeten.** Der Server prüft, was
+zurückkommt: die sieben Daten müssen genau die des Planfensters sein, die
+Begründung höchstens drei Sätze, eine Einheit braucht Dauer und Zone, ein
+Ruhetag hat beides nicht. Eine Antwort, die durchfällt, wird **einmal**
+nachgefordert — mit der Angabe, was falsch war. Fällt auch die zweite
+durch, antwortet der Endpunkt mit `502`; eine halb gezeichnete Woche wäre
+schlechter als eine benannte Fehlermeldung. Beide Aufrufe stehen auf der
+Monatsrechnung, und nichts Fehlerhaftes wird zwischengespeichert.
+
+**Zielherzfrequenzen kommen nicht vom Modell.** Es nennt eine Zone; die
+Herzfrequenzen dazu rechnet Tempo aus den Zonengrenzen und den
+Schwellenwerten des Athleten. Offene Enden bleiben offen: Friels Zone 1
+hat keine untere Grenze, die man anzeigen sollte, Zone 5 keine obere,
+solange keine HFmax hinterlegt ist. Sind gar keine Schwellen konfiguriert,
+sagt die Antwort das in einem Satz, statt Zahlen zu erfinden.
+
 ### Chatverlauf
 
 `POST /api/ai/chat` nimmt die früheren Runden entgegen; wie viele davon
@@ -339,10 +364,18 @@ Schritte und je einen Endpunkt:
 
 ```
 POST   /api/plan/workouts             Vorschlag anlegen  (?replace=true)
+POST   /api/plan/workouts/adopt       generierte Tage übernehmen
 PUT    /api/plan/workouts/{id}        Vorschlag ändern
 POST   /api/plan/workouts/{id}/confirm  bestätigen
 POST   /api/plan/workouts/{id}/push     an die Uhr senden
 ```
+
+`adopt` ist der Weg von der Wochenplanung in den Kalender: ein oder
+mehrere generierte Tage, je Tag angelegt **und** bestätigt — der Klick auf
+einen vorgeschlagenen Tag kann nichts anderes bedeuten. Bis zur Uhr ist es
+von dort immer noch ein eigener Schritt. Ein Tag, der nicht geht, kommt als
+Ergebnis zurück und nicht als Fehler, damit ein belegter Mittwoch nicht die
+übrigen sechs Tage mitnimmt.
 
 **Ohne Bestätigung geht nichts raus.** Ein Vorschlag ist ein Vorschlag;
 erst `confirm` macht ihn übertragbar, und eine Änderung danach zieht die
