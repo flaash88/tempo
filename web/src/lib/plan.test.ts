@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { adoptBody, daySpec, openSessions, zoneTone } from "./plan";
+import {
+  adoptBody,
+  badgeTone,
+  dayDuration,
+  openSessions,
+  sameWindow,
+  zoneColour,
+} from "./plan";
 import { formatHrTarget, formatPlannedDuration } from "./format";
 import type { PlanAdoptResult, PlanDay } from "./types";
 
@@ -50,24 +57,51 @@ describe("a target heart rate", () => {
 });
 
 describe("a day's line", () => {
-  it("carries duration and zone", () => {
-    expect(daySpec(aDay())).toBe("40 min · Z2");
+  it("carries the duration", () => {
+    expect(dayDuration(aDay())).toBe("40 min");
   });
 
-  it("is empty for a rest day, which has neither", () => {
-    expect(daySpec(rest)).toBe("");
+  it("has none for a rest day", () => {
+    expect(dayDuration(rest)).toBeNull();
+  });
+});
+
+describe("the type badge", () => {
+  it("is the same for every session, whatever zone it is", () => {
+    // The fault this replaced: Friday blue and Sunday green, both
+    // "Einheit". A badge that changes colour looks like it means
+    // something, and this one did not.
+    const zones = [1, 2, 3, 4, 5].map((zone) =>
+      badgeTone(aDay({ zone, zone_label: `Z${zone}` })),
+    );
+    for (const tone of zones) expect(tone).toEqual(zones[0]);
   });
 
-  it("uses zone colours, which describe, and never status colours", () => {
-    expect(zoneTone(aDay())).toEqual({
-      background: "var(--z2-band)",
-      color: "var(--z2)",
-    });
-    expect(zoneTone(rest).color).toBe("var(--t-ink-3)");
-    // Nothing here may reach for --st-good or --st-warn: a Tuesday is not
-    // good or bad, it is easy or hard.
-    for (const day of [aDay(), aDay({ zone: 5, zone_label: "Z5" }), rest]) {
-      expect(JSON.stringify(zoneTone(day))).not.toContain("--st-");
+  it("tells a session from a rest day without reaching for a hue", () => {
+    expect(badgeTone(rest)).not.toEqual(badgeTone(aDay()));
+    for (const tone of [badgeTone(aDay()), badgeTone(rest)]) {
+      expect(JSON.stringify(tone)).not.toMatch(/--z[1-5]/);
+      expect(JSON.stringify(tone)).not.toContain("--st-");
+    }
+  });
+});
+
+describe("the zone's colour", () => {
+  it("comes from the zone palette and follows the zone", () => {
+    for (const zone of [1, 2, 3, 4, 5]) {
+      expect(zoneColour(aDay({ zone, zone_label: `Z${zone}` }))).toBe(`var(--z${zone})`);
+    }
+  });
+
+  it("is nothing at all on a rest day", () => {
+    expect(zoneColour(rest)).toBeNull();
+  });
+
+  it("never judges: no status colour appears in the plan's palette", () => {
+    // Zone colours describe, status colours judge. A Tuesday is easy or
+    // hard, not good or bad.
+    for (const zone of [1, 2, 3, 4, 5]) {
+      expect(zoneColour(aDay({ zone, zone_label: `Z${zone}` }))).not.toContain("--st-");
     }
   });
 });
@@ -124,5 +158,38 @@ describe("the body of an adoption", () => {
 
   it("only ever replaces when it is told to", () => {
     expect(adoptBody([aDay()], { replace: true }).replace).toBe(true);
+  });
+});
+
+describe("the calendar and the proposal", () => {
+  it("agree only when they are the same week", () => {
+    const plan = { from_date: "2026-09-14", to_date: "2026-09-20" };
+
+    expect(sameWindow(plan, { from_date: "2026-09-14", to_date: "2026-09-20" })).toBe(
+      true,
+    );
+  });
+
+  it("do not agree in the case that was reported from the device", () => {
+    // Header "07.09. – 13.09." over a proposal for "11.09. – 17.09.".
+    const plan = { from_date: "2026-09-11", to_date: "2026-09-17" };
+
+    expect(sameWindow(plan, { from_date: "2026-09-07", to_date: "2026-09-13" })).toBe(
+      false,
+    );
+  });
+
+  it("do not agree when only one end matches", () => {
+    const plan = { from_date: "2026-09-14", to_date: "2026-09-20" };
+
+    expect(sameWindow(plan, { from_date: "2026-09-14", to_date: "2026-09-21" })).toBe(
+      false,
+    );
+  });
+
+  it("do not agree while the calendar has nothing loaded", () => {
+    expect(sameWindow({ from_date: "2026-09-14", to_date: "2026-09-20" }, null)).toBe(
+      false,
+    );
   });
 });
