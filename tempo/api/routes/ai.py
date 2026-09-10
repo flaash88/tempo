@@ -26,18 +26,38 @@ from tempo.ai.errors import (
     AiApiError,
     AiAuthError,
     AiRateLimited,
+    AnswerFormatError,
     BudgetExceeded,
     FeaturesTooLarge,
+)
+from tempo.ai.plan_week import (
+    PlanFormatProblem,
+    WeekPlan,
+    check,
+    format_contract,
+    parse,
+    plan_window,
+    resolve,
 )
 from tempo.ai.service import (
     AiAnswer,
     AiClientFactory,
+    AnswerValidator,
     answer,
     default_ai_client_factory,
 )
 from tempo.api.deps import EngineDep, SessionDep, SettingsDep
-from tempo.api.schemas import AiAnswerResponse, AiBudgetState, AiChatRequest
+from tempo.api.schemas import (
+    AiAnswerResponse,
+    AiBudgetState,
+    AiChatRequest,
+    AiWeekPlanResponse,
+    PlanDayOut,
+    WeekPlanOut,
+)
 from tempo.config import Settings
+from tempo.db.models import AthleteSettings
+from tempo.db.session import session_scope
 
 log = logging.getLogger(__name__)
 
@@ -80,17 +100,20 @@ def _client_factory(request: Request) -> AiClientFactory:
     return factory  # type: ignore[no-any-return]
 
 
-def _run(
+def _execute(
     request: Request,
     settings: Settings,
     engine: EngineDep,
     *,
     task: str,
+    as_of: dt.date | None = None,
     activity_id: str | None = None,
     question: str | None = None,
     history: Sequence[tuple[str, str]] = (),
     refresh: bool = False,
-) -> AiAnswerResponse:
+    task_extra: str | None = None,
+    validator: AnswerValidator | None = None,
+) -> AiAnswer:
     """Every endpoint's body, including the failure modes.
 
     The exceptions are translated here rather than in the service, so that
@@ -103,10 +126,13 @@ def _run(
             settings,
             task=task,
             client_factory=_client_factory(request),
+            as_of=as_of,
             activity_id=activity_id,
             question=question,
             history=history,
             refresh=refresh,
+            task_extra=task_extra,
+            validator=validator,
         )
     except BudgetExceeded as exc:
         state = budget_state(engine, budget_eur=settings.monthly_budget_eur)
@@ -143,13 +169,47 @@ def _run(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Die Kennzahlen passen nicht in eine Anfrage",
         ) from exc
+    except AnswerFormatError as exc:
+        # Twice asked, twice the wrong shape. Better a stated failure than
+        # a half-drawn screen built from whatever came back.
+        log.error("AI answer did not match its contract", extra={"task": task})
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Die Antwort kam nicht im erwarteten Format zurück: {exc}",
+        ) from exc
 
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Aktivität nicht gefunden",
         )
-    return _response(result)
+    return result
+
+
+def _run(
+    request: Request,
+    settings: Settings,
+    engine: EngineDep,
+    *,
+    task: str,
+    activity_id: str | None = None,
+    question: str | None = None,
+    history: Sequence[tuple[str, str]] = (),
+    refresh: bool = False,
+) -> AiAnswerResponse:
+    """The unstructured endpoints: one answer, one block of text."""
+    return _response(
+        _execute(
+            request,
+            settings,
+            engine,
+            task=task,
+            activity_id=activity_id,
+            question=question,
+            history=history,
+            refresh=refresh,
+        )
+    )
 
 
 @router.post(
@@ -196,9 +256,44 @@ def ai_activity(
     )
 
 
+def _plan_out(plan: WeekPlan) -> WeekPlanOut:
+    return WeekPlanOut(
+        from_date=plan.from_date,
+        to_date=plan.to_date,
+        rationale=plan.rationale,
+        days=[
+            PlanDayOut(
+                date=day.date,
+                weekday=day.weekday,
+                weekday_long=day.weekday_long,
+                kind="session" if day.kind == "session" else "rest",
+                title=day.title,
+                duration_s=day.duration_s,
+                zone=day.zone,
+                zone_label=day.zone_label,
+                target_hr_low=day.target_hr_low,
+                target_hr_high=day.target_hr_high,
+                purpose=day.purpose,
+            )
+            for day in plan.days
+        ],
+        limitations=list(plan.limitations),
+        hr_source=plan.hr_source,
+        hr_note=plan.hr_note,
+    )
+
+
+def _athlete(engine: EngineDep) -> AthleteSettings | None:
+    with session_scope(engine) as session:
+        athlete = session.get(AthleteSettings, 1)
+        if athlete is not None:
+            session.expunge(athlete)
+    return athlete
+
+
 @router.post(
     "/plan-week",
-    response_model=AiAnswerResponse,
+    response_model=AiWeekPlanResponse,
     summary="Wochenplan",
 )
 def ai_plan_week(
@@ -207,9 +302,40 @@ def ai_plan_week(
     settings: SettingsDep,
     engine: EngineDep,
     refresh: bool = False,
-) -> AiAnswerResponse:
-    """The coming week. Uses the planning model from the configuration."""
-    return _run(request, settings, engine, task="plan_week", refresh=refresh)
+) -> AiWeekPlanResponse:
+    """The coming week, as seven days rather than a page of prose.
+
+    The dates are decided here and handed to the model as part of the
+    contract; the shape of what comes back is checked before anything is
+    stored, and one repair round is spent on an answer that misses it. The
+    heart rates are added afterwards from the athlete's own zone bounds —
+    the model names a zone and never a number.
+    """
+    as_of = dt.datetime.now(tz=dt.UTC).date()
+    window = plan_window(as_of)
+    result = _execute(
+        request,
+        settings,
+        engine,
+        task="plan_week",
+        as_of=as_of,
+        refresh=refresh,
+        task_extra=format_contract(window),
+        validator=lambda text: check(text, window=window),
+    )
+    try:
+        parsed = parse(result.text, window=window)
+    except PlanFormatProblem as problem:  # pragma: no cover - the validator ran first
+        # Unreachable while the validator above is the same check. Kept
+        # because "unreachable" is a claim about today's code, and the
+        # alternative is a stack trace on a German screen.
+        log.error("plan parsed differently than it validated")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Die Antwort kam nicht im erwarteten Format zurück: {problem}",
+        ) from problem
+    plan = resolve(parsed, window=window, athlete=_athlete(engine))
+    return AiWeekPlanResponse(**_response(result).model_dump(), plan=_plan_out(plan))
 
 
 @router.post(

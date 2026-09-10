@@ -534,6 +534,95 @@ class AiAnswerResponse(BaseModel):
     cost_eur: float = 0.0
 
 
+class PlanDayOut(BaseModel):
+    """One day of a generated week.
+
+    ``target_hr_low`` and ``target_hr_high`` come from the athlete's own
+    zone bounds, never from the model — and either end may be missing
+    rather than guessed: Friel's zone 1 has no lower bound worth showing,
+    and zone 5 has no ceiling unless HFmax is configured.
+    """
+
+    date: dt.date
+    weekday: str
+    weekday_long: str
+    kind: Literal["session", "rest"]
+    title: str
+    duration_s: int | None = None
+    zone: int | None = Field(default=None, ge=1, le=5)
+    zone_label: str | None = None
+    target_hr_low: int | None = None
+    target_hr_high: int | None = None
+    purpose: str
+
+
+class WeekPlanOut(BaseModel):
+    """A generated week, as structure the interface can lay out.
+
+    The limitations of the data are their own list rather than sentences
+    mixed into the days: an athlete reading Wednesday wants Wednesday, and
+    a caveat about HRV history belongs where caveats are collected.
+    """
+
+    from_date: dt.date
+    to_date: dt.date
+    rationale: str
+    days: list[PlanDayOut]
+    limitations: list[str] = Field(default_factory=list)
+    # Which zone model the heart rates came from, and — when none did —
+    # one sentence saying why not.
+    hr_source: str | None = None
+    hr_note: str | None = None
+
+
+class AiWeekPlanResponse(AiAnswerResponse):
+    """The week plan, structured, with the model's raw answer kept.
+
+    ``text`` is what the model actually sent. It stays in the response so
+    the athlete can see the source of what is drawn, but it is not the
+    view: that is ``plan``.
+    """
+
+    plan: WeekPlanOut
+
+
+class PlanAdoptDay(BaseModel):
+    """One generated day the athlete wants in the calendar."""
+
+    model_config = {"extra": "forbid"}
+
+    date: dt.date
+    title: str = Field(min_length=1, max_length=200)
+    duration_s: int = Field(gt=0, le=86_400)
+    zone_label: str | None = Field(default=None, max_length=8)
+    purpose: str = Field(default="", max_length=1_000)
+
+
+class PlanAdoptRequest(BaseModel):
+    """Days to take over: one of them, or the whole week."""
+
+    model_config = {"extra": "forbid"}
+
+    days: list[PlanAdoptDay] = Field(min_length=1, max_length=7)
+    # Only ever true when the athlete has been shown the clash and said so.
+    replace: bool = False
+
+
+class PlanAdoptResult(BaseModel):
+    """What happened to one day. A refusal is a result, not an error."""
+
+    date: dt.date
+    created: bool
+    workout: PlannedWorkoutSummary | None = None
+    detail: str | None = None
+
+
+class PlanAdoptResponse(BaseModel):
+    results: list[PlanAdoptResult]
+    created: int
+    skipped: int
+
+
 class WorkoutProposalRequest(BaseModel):
     """A session Tempo suggests. Plausibility only — no coaching here."""
 

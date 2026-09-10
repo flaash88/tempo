@@ -17,6 +17,10 @@ from fastapi import APIRouter, HTTPException, Request, status
 from tempo.api.deps import EngineDep, SessionDep, SettingsDep
 from tempo.api.routes.today import planned_summary
 from tempo.api.schemas import (
+    PlanAdoptDay,
+    PlanAdoptRequest,
+    PlanAdoptResponse,
+    PlanAdoptResult,
     PlannedWorkoutSummary,
     WorkoutProposalRequest,
     WorkoutPushResponse,
@@ -102,6 +106,89 @@ def create_workout(
             "Mit replace=true wird sie ersetzt und muss neu bestätigt werden.",
         ) from exc
     return _summary(entry)
+
+
+def _from_plan_day(day: PlanAdoptDay) -> WorkoutProposal:
+    """A generated day, as a session the calendar can hold.
+
+    The description is assembled here rather than sent by the client, so
+    what lands in the athlete's calendar is built from the fields that
+    were validated and not from a string somebody put together on the way.
+    """
+    parts = []
+    if day.zone_label:
+        parts.append(f"Zielzone {day.zone_label}.")
+    if day.purpose.strip():
+        parts.append(day.purpose.strip())
+    return WorkoutProposal(
+        date=day.date,
+        sport="Run",
+        name=day.title.strip(),
+        description=" ".join(parts) or None,
+        target_time_s=day.duration_s,
+    )
+
+
+@router.post(
+    "/adopt",
+    response_model=PlanAdoptResponse,
+    summary="Generierte Tage übernehmen",
+)
+def adopt_plan(
+    payload: PlanAdoptRequest,
+    _session: SessionDep,
+    engine: EngineDep,
+) -> PlanAdoptResponse:
+    """Take generated days into the calendar, confirmed.
+
+    The athlete's click on a generated day *is* the confirmation — there
+    is nothing else it could mean — so each day is proposed and confirmed
+    in one step. That is still short of the watch: sending stays the
+    separate, explicit act it was in phase 6.
+
+    A day that cannot be taken over is reported as a result rather than
+    raised as an error, because the week button would otherwise fail whole
+    over a single Wednesday that already carries something. Nothing is
+    overwritten unless ``replace`` says so, and a session the source owns
+    is not overwritten even then.
+    """
+    results: list[PlanAdoptResult] = []
+    for day in payload.days:
+        results.append(_adopt_day(engine, day, replace=payload.replace))
+    created = sum(1 for result in results if result.created)
+    return PlanAdoptResponse(
+        results=results, created=created, skipped=len(results) - created
+    )
+
+
+def _adopt_day(
+    engine: EngineDep, day: PlanAdoptDay, *, replace: bool
+) -> PlanAdoptResult:
+    today = dt.datetime.now(tz=dt.UTC).date()
+    if day.date < today - dt.timedelta(days=MAX_BACKDATING_DAYS):
+        return PlanAdoptResult(
+            date=day.date,
+            created=False,
+            detail="Liegt in der Vergangenheit und wird nicht angelegt",
+        )
+    try:
+        entry = propose_workout(engine, _from_plan_day(day), replace=replace)
+    except AlreadyConfirmed:
+        return PlanAdoptResult(
+            date=day.date,
+            created=False,
+            detail=("Für diesen Tag ist bereits eine bestätigte Einheit hinterlegt"),
+        )
+    except NotOurWorkout:  # pragma: no cover - propose_workout refuses earlier
+        return PlanAdoptResult(
+            date=day.date,
+            created=False,
+            detail="Für diesen Tag steht ein Eintrag aus dem Kalender der Quelle",
+        )
+    confirmed = confirm_workout(engine, entry.id)
+    return PlanAdoptResult(
+        date=day.date, created=True, workout=_summary(confirmed or entry)
+    )
 
 
 @router.put(
