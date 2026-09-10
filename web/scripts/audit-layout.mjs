@@ -58,6 +58,14 @@ const ZOOMS = [1, 1.5, 2];
 // How far the iOS keyboard shrinks the visual viewport from below, near
 // enough. Simulated, see the note where it is used.
 const KEYBOARD_HEIGHT = 320;
+// Every screen with a field. The third entry says whether the screen owes
+// a composer pinned to the bottom — only the chat does; the others just
+// have to get the bar out of the way.
+const KEYBOARD_SCREENS = [
+  ["/coach", "Coach", true],
+  ["/plan", "Plan (Formular)", false],
+  ["/diagnose", "Diagnose", false],
+];
 // The bar's reference colour is read above its safe-area padding, so the
 // sample sits in the row the labels are in rather than in the strip the
 // home indicator occupies.
@@ -480,6 +488,11 @@ for (const mode of MODES) {
 
   // The keyboard, as far as it goes without a device.
   //
+  // Every screen that has a field gets the same treatment, because the
+  // rule is the same everywhere: the bar stands down while something
+  // covers the bottom. Only the Coach screen also has a composer to pin
+  // there, so only it is checked for one.
+  //
   // iOS shrinks the visual viewport from below when the keyboard opens
   // and leaves the layout viewport alone — the same divergence zoom
   // produces, from the other end. Chromium has no keyboard to open, so
@@ -487,44 +500,112 @@ for (const mode of MODES) {
   // this checks is that the shell follows a shrunk visual viewport, not
   // that WebKit shrinks it. The expected height is the injected constant,
   // so the assertion cannot agree with itself by accident.
-  await page.goto(`${BASE}/coach`, { waitUntil: "networkidle" });
+  for (const [route, label, expectComposer] of KEYBOARD_SCREENS) {
+  await page.goto(`${BASE}${route}`, { waitUntil: "networkidle" });
   await page.addStyleTag({ content: insetCss(mode.insets) });
   await page.waitForTimeout(400);
-  const keyboard = await page.evaluate((keyboardHeight) => {
+  if (route === "/plan") {
+    // The form only exists once it has been opened.
+    const opener = page.locator("text=Einheit anlegen");
+    if (await opener.count()) {
+      await opener.first().click();
+      await page.waitForTimeout(300);
+    }
+  }
+  const keyboard = await page.evaluate(({ keyboardHeight, expectComposer }) => {
     const view = window.visualViewport;
     if (!view) return { skipped: "kein visualViewport" };
+
     const full = view.height;
     const shrunk = full - keyboardHeight;
     Object.defineProperty(view, "height", { configurable: true, get: () => shrunk });
     view.dispatchEvent(new Event("resize"));
+
     return new Promise((resolve) =>
       requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
-          const shell = document.getElementById("root").getBoundingClientRect();
-          resolve({
-            erwartet: Math.round(shrunk),
-            huelle: Math.round(shell.height),
-            unterkante: Math.round(shell.bottom),
-          });
-        }),
+        requestAnimationFrame(() =>
+          // Two frames for the measurement, a third for React's render.
+          requestAnimationFrame(() => {
+            const problems = [];
+            const shell = document.getElementById("root").getBoundingClientRect();
+            const visibleBottom = view.offsetTop + view.height;
+
+            // 1. The shell ends at the top of the keyboard.
+            if (Math.abs(shell.height - shrunk) > 1) {
+              problems.push(`Hülle ${Math.round(shell.height)} statt ${Math.round(shrunk)}`);
+            }
+
+            // 2. The tab bar is gone. Over the keyboard belongs the field.
+            const nav = document.querySelector("nav[aria-label='Hauptnavigation']");
+            if (nav && nav.getBoundingClientRect().height > 0) {
+              problems.push("die Tab-Leiste steht noch über der Tastatur");
+            }
+
+            // 3. The composer sits at the bottom of what is visible.
+            const field = document.getElementById("coach-question");
+            const composer = field?.closest("div");
+            const box = composer?.getBoundingClientRect();
+            if (!expectComposer) {
+              // Nothing to pin here; the screens with ordinary fields only
+              // owe the first two promises.
+              resolve({
+                erwartet: Math.round(shrunk),
+                huelle: Math.round(shell.height),
+                leisteSichtbar: Boolean(nav && nav.getBoundingClientRect().height > 0),
+                eingabefeldUnterkante: null,
+                sichtbarBis: Math.round(visibleBottom),
+                problems,
+              });
+              return;
+            }
+            if (!box) {
+              problems.push("kein Eingabefeld gefunden");
+            } else if (Math.abs(box.bottom - visibleBottom) > 2) {
+              problems.push(
+                `Eingabefeld endet bei ${Math.round(box.bottom)}, sichtbar bis ${Math.round(visibleBottom)}`,
+              );
+            }
+
+            // 4. Nothing of the conversation is hidden underneath it. The
+            //    composer takes its own space rather than overlaying, so
+            //    what would break this is content painted behind it.
+            if (box) {
+              for (const x of [
+                Math.round(view.offsetLeft + 8),
+                Math.round(view.offsetLeft + view.width / 2),
+              ]) {
+                for (const y of [box.top + 4, (box.top + visibleBottom) / 2]) {
+                  const hit = document.elementFromPoint(x, y);
+                  if (hit && !composer.contains(hit) && hit !== composer) {
+                    problems.push(
+                      `unter dem Eingabefeld liegt ${hit.tagName}${hit.id ? "#" + hit.id : ""}`,
+                    );
+                  }
+                }
+              }
+            }
+
+            resolve({
+              erwartet: Math.round(shrunk),
+              huelle: Math.round(shell.height),
+              leisteSichtbar: Boolean(nav && nav.getBoundingClientRect().height > 0),
+              eingabefeldUnterkante: box ? Math.round(box.bottom) : null,
+              sichtbarBis: Math.round(visibleBottom),
+              problems,
+            });
+          }),
+        ),
       ),
     );
-  }, KEYBOARD_HEIGHT);
+  }, { keyboardHeight: KEYBOARD_HEIGHT, expectComposer });
 
-  const keyboardProblems = [];
-  if (keyboard.skipped) {
-    keyboardProblems.push(keyboard.skipped);
-  } else if (Math.abs(keyboard.huelle - keyboard.erwartet) > 1) {
-    keyboardProblems.push(
-      `Hülle folgt der Tastatur nicht: ${keyboard.huelle} statt ${keyboard.erwartet}`,
-    );
-  }
   report.push({
     mode: mode.name,
-    name: "Coach + Tastatur (simuliert)",
+    name: `${label} + Tastatur (simuliert)`,
     keyboard,
-    problems: keyboardProblems,
+    problems: keyboard.skipped ? [keyboard.skipped] : keyboard.problems,
   });
+  }
   await close();
 }
 
@@ -540,9 +621,11 @@ for (const entry of report) {
       ? "keine Leiste"
       : "";
   console.log(`\n── ${entry.name}`);
-  if (entry.keyboard) {
+  if (entry.keyboard && !entry.keyboard.skipped) {
     console.log(
-      `   Hülle ${entry.keyboard.huelle}px bei erwarteten ${entry.keyboard.erwartet}px`,
+      `   Hülle ${entry.keyboard.huelle}px (erwartet ${entry.keyboard.erwartet})` +
+        `  Leiste sichtbar: ${entry.keyboard.leisteSichtbar}` +
+        `  Eingabefeld bis ${entry.keyboard.eingabefeldUnterkante}, sichtbar bis ${entry.keyboard.sichtbarBis}`,
     );
   }
   if (bar) {
