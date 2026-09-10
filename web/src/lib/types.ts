@@ -257,6 +257,13 @@ export type PlanResponse = {
   planned_duration_s: number | null;
   planned_load: number | null;
   races: PlannedWorkout[];
+  /**
+   * The week POST /api/ai/plan-week would plan, whatever window this
+   * response covers. The rule for which week that is lives on the server;
+   * the interface only reads it.
+   */
+  plan_week_from: string;
+  plan_week_to: string;
 };
 
 export type AiBudget = {

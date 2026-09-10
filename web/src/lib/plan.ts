@@ -7,29 +7,45 @@
  */
 
 import { formatPlannedDuration } from "./format";
-import type { PlanAdoptResult, PlanDay } from "./types";
+import type { PlanResponse, PlanAdoptResult, PlanDay, WeekPlan } from "./types";
 
-/** "40 min · Z2" for a session, "" for a rest day. */
-export function daySpec(day: PlanDay): string {
-  return [
-    day.duration_s === null ? null : formatPlannedDuration(day.duration_s),
-    day.zone_label,
-  ]
-    .filter((part): part is string => Boolean(part))
-    .join(" · ");
+/** The duration a day's row shows, or null for a rest day. */
+export function dayDuration(day: PlanDay): string | null {
+  return day.duration_s === null ? null : formatPlannedDuration(day.duration_s);
 }
 
 /**
- * The badge's colours.
+ * The type badge's colours: session or rest day, and nothing else.
  *
- * Zone colours, which describe — never status colours, which judge. A
- * plan does not say whether a Tuesday is good.
+ * It carried the zone's colour once, which put two different colours on
+ * two days of the same type and made the badge look like it meant
+ * something it did not. The zone's colour belongs on the zone.
  */
-export function zoneTone(day: PlanDay): { background: string; color: string } {
-  if (day.kind === "rest" || day.zone === null) {
-    return { background: "var(--t-surface-2)", color: "var(--t-ink-3)" };
+export function badgeTone(day: PlanDay): {
+  background: string;
+  color: string;
+  boxShadow?: string;
+} {
+  if (day.kind === "rest") {
+    return {
+      background: "transparent",
+      color: "var(--t-ink-3)",
+      boxShadow: "inset 0 0 0 1px var(--t-line)",
+    };
   }
-  return { background: `var(--z${day.zone}-band)`, color: `var(--z${day.zone})` };
+  return { background: "var(--t-surface-2)", color: "var(--t-ink-2)" };
+}
+
+/**
+ * The colour of the zone label, from the zone palette in
+ * `tempo-tokens.css` and from nowhere else.
+ *
+ * Zone colours describe; they never say whether a day is good. Status
+ * colours stay out of the plan entirely.
+ */
+export function zoneColour(day: PlanDay): string | null {
+  if (day.kind === "rest" || day.zone === null) return null;
+  return `var(--z${day.zone})`;
 }
 
 /** The session days that are not in the calendar yet. Rest days never are. */
@@ -72,4 +88,20 @@ export function adoptBody(
       purpose: day.purpose,
     })),
   };
+}
+
+/**
+ * Whether the calendar above the proposal is showing the proposal's week.
+ *
+ * The fault this exists to prevent: a header reading "07.09. – 13.09."
+ * over a proposal for "11.09. – 17.09.". Two windows on one screen that
+ * disagree are worse than one window, so when this is false the proposal
+ * is not drawn at all — only a line saying which week it is for.
+ */
+export function sameWindow(
+  plan: Pick<WeekPlan, "from_date" | "to_date">,
+  calendar: Pick<PlanResponse, "from_date" | "to_date"> | null,
+): boolean {
+  if (calendar === null) return false;
+  return plan.from_date === calendar.from_date && plan.to_date === calendar.to_date;
 }

@@ -6,6 +6,7 @@ import datetime as dt
 
 from fastapi import APIRouter, HTTPException, status
 
+from tempo.ai.plan_week import plan_window
 from tempo.api.deps import EngineDep, SessionDep
 from tempo.api.routes.today import planned_summary
 from tempo.api.schemas import PlanResponse
@@ -36,7 +37,10 @@ def get_plan(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
         ) from exc
 
+    window = plan_window(today)
     return PlanResponse(
+        plan_week_from=window[0],
+        plan_week_to=window[-1],
         from_date=report.from_date,
         to_date=report.to_date,
         workouts=[

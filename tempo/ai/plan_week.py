@@ -158,8 +158,23 @@ class WeekPlan:
 
 
 def plan_window(as_of: dt.date) -> tuple[dt.date, ...]:
-    """The seven days the plan covers: tomorrow, and the six after it."""
-    start = as_of + dt.timedelta(days=1)
+    """The next Monday-to-Sunday week that can still be trained in full.
+
+    A calendar week, not a rolling seven days, and the reason is that the
+    rest of the application already counts in Monday-anchored weeks —
+    ``GET /api/plan`` defaults to one, the weekly volume in Trends is one.
+    A plan that straddled two of them could never be held against
+    "Wochenlast im Rahmen der bisherigen Belastung", because no week the
+    app computes would have the plan's boundaries.
+
+    Which week: the coming one, except on a Monday, when the week the
+    athlete is standing in is still entirely ahead and skipping it would
+    mean planning eight days out. Nothing in the window is ever in the
+    past, which matters because a day in the past cannot be adopted.
+    """
+    # 0 on a Monday, otherwise the days remaining until the next one.
+    ahead = -as_of.weekday() % 7
+    start = as_of + dt.timedelta(days=ahead)
     return tuple(start + dt.timedelta(days=offset) for offset in range(PLAN_DAYS))
 
 

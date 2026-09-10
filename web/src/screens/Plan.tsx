@@ -14,7 +14,7 @@
  * model's raw answer one tap away for anyone who wants to check.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Card,
   EmptyState,
@@ -36,7 +36,51 @@ import type {
   PlanResponse,
 } from "../lib/types";
 import { formatDate, formatHrTarget, formatTarget, formatTime } from "../lib/format";
-import { adoptBody, daySpec, openSessions, zoneTone } from "../lib/plan";
+import {
+  adoptBody,
+  badgeTone,
+  dayDuration,
+  openSessions,
+  sameWindow,
+  zoneColour,
+} from "../lib/plan";
+
+/** A window the calendar can show, as the API writes its dates. */
+type Week = { from: string; to: string };
+
+/**
+ * The week switch. Outlined either way — a filled chip would be the one
+ * filled surface on a screen where primary actions are outlined.
+ */
+function WeekChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className="num px-3 text-sub"
+      style={{
+        minHeight: "var(--touch)",
+        borderRadius: "var(--r-pill)",
+        border: "none",
+        background: "transparent",
+        color: active ? "var(--t-ink)" : "var(--t-ink-3)",
+        boxShadow: `inset 0 0 0 1px ${active ? "var(--t-line-strong)" : "var(--t-line)"}`,
+        font: "inherit",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
 
 const SYNC_LABEL: Record<PlannedWorkout["sync"]["status"], string> = {
   not_sent: "Nicht übertragen",
@@ -151,16 +195,32 @@ function WorkoutRow({
 }
 
 export default function Plan() {
-  const plan = useResource<PlanResponse>("/api/plan");
+  // Which week the calendar shows. null is the week the athlete is
+  // standing in, which is what the server answers without a range.
+  const [shown, setShown] = useState<Week | null>(null);
+  const plan = useResource<PlanResponse>(
+    shown === null
+      ? "/api/plan"
+      : `/api/plan?from_date=${shown.from}&to_date=${shown.to}`,
+  );
   const [answer, setAnswer] = useState<AiWeekPlan | null>(null);
   const [aiProblem, setAiProblem] = useState<string | null>(null);
   const [thinking, setThinking] = useState(false);
 
+  const data = plan.data;
+
   async function planWeek() {
     setThinking(true);
     setAiProblem(null);
+    // Switch the calendar to the week that is about to be planned, so the
+    // header never names one week while the proposal names another.
+    if (data) setShown({ from: data.plan_week_from, to: data.plan_week_to });
     try {
-      setAnswer(await apiSend<AiWeekPlan>("/api/ai/plan-week"));
+      const produced = await apiSend<AiWeekPlan>("/api/ai/plan-week");
+      // And follow the answer itself, which is the window that was really
+      // planned rather than the one that was expected.
+      setShown({ from: produced.plan.from_date, to: produced.plan.to_date });
+      setAnswer(produced);
     } catch (cause) {
       setAiProblem(
         cause instanceof ApiError ? cause.message : "Die Auswertung ist fehlgeschlagen.",
@@ -170,7 +230,23 @@ export default function Plan() {
     }
   }
 
-  const data = plan.data;
+  // The week the athlete is standing in, remembered from the first answer
+  // the server gave without being asked for a range — once the calendar
+  // has moved on, that window is no longer in any response.
+  const [thisWeek, setThisWeek] = useState<Week | null>(null);
+  useEffect(() => {
+    if (shown === null && data !== null && thisWeek === null) {
+      setThisWeek({ from: data.from_date, to: data.to_date });
+    }
+  }, [shown, data, thisWeek]);
+
+  const planned: Week | null = data
+    ? { from: data.plan_week_from, to: data.plan_week_to }
+    : null;
+  // On a Monday the week to plan is the week the athlete is in, and a
+  // switch between one week and the same week is not a switch.
+  const twoWeeks =
+    thisWeek !== null && planned !== null && thisWeek.from !== planned.from;
 
   return (
     <Screen
@@ -186,10 +262,26 @@ export default function Plan() {
 
       <Card>
         <TileHeader title="Woche" />
+        {twoWeeks && planned ? (
+          <div className="mt-2 flex flex-wrap gap-2">
+            <WeekChip active={shown === null} onClick={() => setShown(null)}>
+              Diese Woche
+            </WeekChip>
+            <WeekChip active={shown !== null} onClick={() => setShown(planned)}>
+              {formatDate(planned.from)} – {formatDate(planned.to)}
+            </WeekChip>
+          </div>
+        ) : null}
         <div className="mt-1">
           {plan.loading ? <TileSkeleton lines={3} /> : null}
           {data && data.workouts.length === 0 ? (
-            <EmptyState message="Für diese Woche ist nichts geplant." />
+            // Named rather than "diese Woche": next to a week switch, a
+            // demonstrative pronoun stops saying which week it means.
+            <EmptyState
+              message={`Für ${formatDate(data.from_date)} – ${formatDate(
+                data.to_date,
+              )} ist nichts geplant.`}
+            />
           ) : null}
           {data?.workouts.map((workout) => (
             <WorkoutRow key={workout.id} workout={workout} onChanged={plan.reload} />
@@ -222,19 +314,45 @@ export default function Plan() {
           {!thinking && answer === null && aiProblem === null ? (
             <EmptyState message="Noch kein Vorschlag für die kommende Woche." />
           ) : null}
-          {answer ? <WeekProposal answer={answer} onAdopted={plan.reload} /> : null}
+          {answer && sameWindow(answer.plan, data) ? (
+            <WeekProposal
+              key={`${answer.plan.from_date}:${answer.created_at}`}
+              answer={answer}
+              onAdopted={plan.reload}
+            />
+          ) : null}
+          {answer && !sameWindow(answer.plan, data) ? (
+            // The calendar has been switched to another week. Drawing the
+            // proposal here would put two different weeks on one screen,
+            // which is the fault this card was rebuilt to remove.
+            <div className="flex flex-col items-start gap-3">
+              <p className="m-0 text-sub" style={{ color: "var(--t-ink-3)" }}>
+                Der Vorschlag gilt für {formatDate(answer.plan.from_date)} –{" "}
+                {formatDate(answer.plan.to_date)}.
+              </p>
+              <SecondaryButton
+                onClick={() =>
+                  setShown({ from: answer.plan.from_date, to: answer.plan.to_date })
+                }
+              >
+                Zu dieser Woche
+              </SecondaryButton>
+            </div>
+          ) : null}
           {aiProblem ? (
             <p className="m-0 text-sub" style={{ color: "var(--st-warn)" }}>
               {aiProblem}
             </p>
           ) : null}
-          <PrimaryButton onClick={planWeek} disabled={thinking}>
-            {thinking
-              ? "Wird erstellt …"
-              : answer
-                ? "Woche neu planen lassen"
-                : "Woche vorschlagen"}
-          </PrimaryButton>
+          {answer ? (
+            <SecondaryButton onClick={planWeek} disabled={thinking}>
+              {thinking ? "Wird erstellt …" : "Woche neu planen lassen"}
+            </SecondaryButton>
+          ) : (
+            <PrimaryButton onClick={planWeek} disabled={thinking}>
+              {thinking ? "Wird erstellt …" : "Woche vorschlagen"}
+            </PrimaryButton>
+          )}
           <p className="m-0 text-micro" style={{ color: "var(--t-ink-3)" }}>
             Die KI schlägt eine Verteilung vor — du bestätigst, bevor etwas
             angelegt oder überschrieben wird.
@@ -343,6 +461,12 @@ export function WeekProposal({
         ))}
       </div>
 
+      {open.length > 0 ? (
+        <PrimaryButton disabled={busy !== null} onClick={() => void adopt(open)}>
+          {busy === "week" ? "Wird übernommen …" : "Ganze Woche übernehmen"}
+        </PrimaryButton>
+      ) : null}
+
       {plan.hr_note ? (
         <p className="m-0 text-micro" style={{ color: "var(--t-ink-3)" }}>
           {plan.hr_note}
@@ -353,12 +477,6 @@ export function WeekProposal({
         <p className="m-0 text-sub" style={{ color: "var(--st-warn)" }}>
           {problem}
         </p>
-      ) : null}
-
-      {open.length > 0 ? (
-        <SecondaryButton disabled={busy !== null} onClick={() => void adopt(open)}>
-          {busy === "week" ? "Wird übernommen …" : "Ganze Woche übernehmen"}
-        </SecondaryButton>
       ) : null}
 
       {plan.limitations.length > 0 ? (
@@ -375,15 +493,6 @@ export function WeekProposal({
           </ul>
         </Collapsible>
       ) : null}
-
-      <Collapsible label="Rohfassung" hint="die Antwort, wie sie kam">
-        <pre
-          className="num m-0 overflow-x-auto text-micro"
-          style={{ color: "var(--t-ink-3)", whiteSpace: "pre-wrap" }}
-        >
-          {answer.text}
-        </pre>
-      </Collapsible>
 
       <p className="num m-0 text-micro" style={{ color: "var(--t-ink-3)" }}>
         {answer.model}
@@ -413,8 +522,9 @@ function DayRow({
   onAdopt: (options?: { replace?: boolean }) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const tone = zoneTone(day);
-  const spec = daySpec(day);
+  const badge = badgeTone(day);
+  const duration = dayDuration(day);
+  const zone = zoneColour(day);
   const heartRate = formatHrTarget(day.target_hr_low, day.target_hr_high);
   const clash = result !== undefined && !result.created && result.detail !== null;
 
@@ -452,15 +562,23 @@ function DayRow({
           <span className="flex flex-wrap items-center gap-2">
             <span
               className="px-2 text-micro"
-              style={{ borderRadius: "var(--r-sm)", ...tone }}
+              style={{ borderRadius: "var(--r-sm)", ...badge }}
             >
               {day.kind === "rest" ? "Ruhetag" : "Einheit"}
             </span>
-            <span className="truncate text-body">{day.title}</span>
+            {/* Two lines rather than an ellipsis: a shortened session name
+                is a session whose name you cannot read. */}
+            <span className="line-clamp-2 min-w-0 text-body">{day.title}</span>
           </span>
-          {spec ? (
+          {duration || day.zone_label ? (
             <span className="num text-sub" style={{ color: "var(--t-ink-3)" }}>
-              {spec}
+              {duration}
+              {duration && day.zone_label ? " · " : ""}
+              {day.zone_label ? (
+                <span style={zone === null ? undefined : { color: zone }}>
+                  {day.zone_label}
+                </span>
+              ) : null}
             </span>
           ) : null}
         </span>

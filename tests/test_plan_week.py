@@ -28,6 +28,7 @@ from tempo.ai.plan_week import (
 from tempo.db.models import AthleteSettings
 from tempo.metrics.zones import hr_zones_from_hr_max, hr_zones_from_lthr
 
+# A Thursday, so the planned week is not the one the date sits in.
 AS_OF = dt.date(2026, 9, 10)
 WINDOW = plan_window(AS_OF)
 
@@ -62,10 +63,33 @@ def as_text(payload: dict[str, Any]) -> str:
 # --- the window --------------------------------------------------------
 
 
-def test_the_window_is_the_seven_days_after_today() -> None:
+def test_the_window_is_a_calendar_week_monday_to_sunday() -> None:
+    """Not a rolling seven days: the rest of the app counts in Mo-So weeks."""
     assert len(WINDOW) == PLAN_DAYS
-    assert WINDOW[0] == AS_OF + dt.timedelta(days=1)
-    assert WINDOW[-1] == AS_OF + dt.timedelta(days=7)
+    assert WINDOW[0].weekday() == 0
+    assert WINDOW[-1].weekday() == 6
+    assert WINDOW[0] == dt.date(2026, 9, 14)
+    assert WINDOW[-1] == dt.date(2026, 9, 20)
+
+
+def test_no_day_of_the_window_lies_in_the_past() -> None:
+    """A day that has been cannot be adopted, so it is never planned."""
+    for weekday in range(7):
+        as_of = dt.date(2026, 9, 14) + dt.timedelta(days=weekday)
+        assert plan_window(as_of)[0] >= as_of
+
+
+def test_a_monday_plans_the_week_it_stands_in() -> None:
+    """The whole week is still ahead; skipping it would plan eight days out."""
+    monday = dt.date(2026, 9, 14)
+
+    assert plan_window(monday)[0] == monday
+
+
+def test_every_other_day_plans_the_coming_week() -> None:
+    for offset in range(1, 7):
+        as_of = dt.date(2026, 9, 14) + dt.timedelta(days=offset)
+        assert plan_window(as_of)[0] == dt.date(2026, 9, 21)
 
 
 def test_the_contract_names_every_date_the_answer_must_carry() -> None:
@@ -225,15 +249,15 @@ def test_weekdays_are_derived_from_the_dates_not_taken_from_the_answer() -> None
     plan = resolve(parse(as_text(a_plan()), window=WINDOW), window=WINDOW, athlete=None)
 
     assert [day.weekday for day in plan.days] == [
-        "Fr",
-        "Sa",
-        "So",
         "Mo",
         "Di",
         "Mi",
         "Do",
+        "Fr",
+        "Sa",
+        "So",
     ]
-    assert plan.days[0].weekday_long == "Freitag"
+    assert plan.days[0].weekday_long == "Montag"
 
 
 def test_the_limitations_stay_their_own_list() -> None:
