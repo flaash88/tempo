@@ -5,6 +5,13 @@
  * on it: unconfirmed sessions get "Bestätigen", confirmed ones "An Uhr
  * senden", and one that changed after being transferred says so rather than
  * pretending the watch is current.
+ *
+ * The generated week is a list of days, not a page of prose. A week of
+ * training rendered as one block of text is unreadable on a phone — the
+ * Tuesday disappears into the Monday — so the endpoint answers with
+ * structure and this screen lays it out: one row per day, the reasoning
+ * above it, the gaps in the data collected in their own block, and the
+ * model's raw answer one tap away for anyone who wants to check.
  */
 
 import { useState } from "react";
@@ -19,8 +26,17 @@ import {
 import { Screen, StatusBanner } from "../components/Chrome";
 import { useResource } from "../lib/useResource";
 import { apiSend, ApiError } from "../lib/api";
-import type { AiAnswer, PlannedWorkout, PlanResponse } from "../lib/types";
-import { formatDate, formatTarget, formatTime } from "../lib/format";
+import type {
+  AiAnswer,
+  AiWeekPlan,
+  PlanAdoptResponse,
+  PlanAdoptResult,
+  PlanDay,
+  PlannedWorkout,
+  PlanResponse,
+} from "../lib/types";
+import { formatDate, formatHrTarget, formatTarget, formatTime } from "../lib/format";
+import { adoptBody, daySpec, openSessions, zoneTone } from "../lib/plan";
 
 const SYNC_LABEL: Record<PlannedWorkout["sync"]["status"], string> = {
   not_sent: "Nicht übertragen",
@@ -136,7 +152,7 @@ function WorkoutRow({
 
 export default function Plan() {
   const plan = useResource<PlanResponse>("/api/plan");
-  const [answer, setAnswer] = useState<AiAnswer | null>(null);
+  const [answer, setAnswer] = useState<AiWeekPlan | null>(null);
   const [aiProblem, setAiProblem] = useState<string | null>(null);
   const [thinking, setThinking] = useState(false);
 
@@ -144,7 +160,7 @@ export default function Plan() {
     setThinking(true);
     setAiProblem(null);
     try {
-      setAnswer(await apiSend<AiAnswer>("/api/ai/plan-week"));
+      setAnswer(await apiSend<AiWeekPlan>("/api/ai/plan-week"));
     } catch (cause) {
       setAiProblem(
         cause instanceof ApiError ? cause.message : "Die Auswertung ist fehlgeschlagen.",
@@ -201,16 +217,28 @@ export default function Plan() {
 
       <Card>
         <TileHeader title="Wochenvorschlag" />
-        <div className="mt-3 flex flex-col gap-3">
-          {answer ? <AiText answer={answer} /> : null}
+        <div className="mt-3 flex flex-col gap-4">
+          {thinking && answer === null ? <TileSkeleton lines={5} /> : null}
+          {!thinking && answer === null && aiProblem === null ? (
+            <EmptyState message="Noch kein Vorschlag für die kommende Woche." />
+          ) : null}
+          {answer ? <WeekProposal answer={answer} onAdopted={plan.reload} /> : null}
           {aiProblem ? (
             <p className="m-0 text-sub" style={{ color: "var(--st-warn)" }}>
               {aiProblem}
             </p>
           ) : null}
           <PrimaryButton onClick={planWeek} disabled={thinking}>
-            {thinking ? "Wird erstellt …" : "Woche vorschlagen"}
+            {thinking
+              ? "Wird erstellt …"
+              : answer
+                ? "Woche neu planen lassen"
+                : "Woche vorschlagen"}
           </PrimaryButton>
+          <p className="m-0 text-micro" style={{ color: "var(--t-ink-3)" }}>
+            Die KI schlägt eine Verteilung vor — du bestätigst, bevor etwas
+            angelegt oder überschrieben wird.
+          </p>
         </div>
       </Card>
     </Screen>
@@ -237,6 +265,312 @@ export function AiText({ answer }: { answer: AiAnswer }) {
         {" · noch "}
         {answer.budget.remaining_eur.toFixed(2)} € im {answer.budget.month}
       </p>
+    </div>
+  );
+}
+
+
+/**
+ * The generated week: reasoning, then one row per day.
+ *
+ * The three blocks are kept apart on purpose. The reasoning is about the
+ * week; a day's row is about that day; and what the data does not support
+ * is its own collapsible block rather than a caveat woven into every
+ * Tuesday. Mixing them is what made the prose version unreadable.
+ */
+export function WeekProposal({
+  answer,
+  onAdopted,
+}: {
+  answer: AiWeekPlan;
+  onAdopted: () => void;
+}) {
+  const plan = answer.plan;
+  const [results, setResults] = useState<Record<string, PlanAdoptResult>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const open = openSessions(plan.days, results);
+
+  async function adopt(days: PlanDay[], { replace = false } = {}) {
+    const only = days.length === 1 ? days[0] : undefined;
+    if (days.length === 0) return;
+    setBusy(only ? only.date : "week");
+    setProblem(null);
+    try {
+      const answered = await apiSend<PlanAdoptResponse>("/api/plan/workouts/adopt", {
+        body: adoptBody(days, { replace }),
+      });
+      setResults((earlier) => {
+        const merged = { ...earlier };
+        for (const result of answered.results) merged[result.date] = result;
+        return merged;
+      });
+      onAdopted();
+    } catch (cause) {
+      setProblem(
+        cause instanceof ApiError ? cause.message : "Das hat nicht geklappt.",
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div
+        className="flex flex-col gap-2 py-1 pl-3"
+        style={{ borderLeft: "2px solid var(--t-accent-line)" }}
+      >
+        <p className="m-0 text-body" style={{ color: "var(--t-ink)" }}>
+          {plan.rationale}
+        </p>
+        <p className="num m-0 text-micro" style={{ color: "var(--t-ink-3)" }}>
+          {formatDate(plan.from_date)} – {formatDate(plan.to_date)}
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {plan.days.map((day) => (
+          <DayRow
+            key={day.date}
+            day={day}
+            result={results[day.date]}
+            busy={busy === day.date}
+            disabled={busy !== null}
+            onAdopt={(options) => void adopt([day], options)}
+          />
+        ))}
+      </div>
+
+      {plan.hr_note ? (
+        <p className="m-0 text-micro" style={{ color: "var(--t-ink-3)" }}>
+          {plan.hr_note}
+        </p>
+      ) : null}
+
+      {problem ? (
+        <p className="m-0 text-sub" style={{ color: "var(--st-warn)" }}>
+          {problem}
+        </p>
+      ) : null}
+
+      {open.length > 0 ? (
+        <SecondaryButton disabled={busy !== null} onClick={() => void adopt(open)}>
+          {busy === "week" ? "Wird übernommen …" : "Ganze Woche übernehmen"}
+        </SecondaryButton>
+      ) : null}
+
+      {plan.limitations.length > 0 ? (
+        <Collapsible
+          label={`Datenlage (${plan.limitations.length})`}
+          hint="was der Vorschlag nicht belegen kann"
+        >
+          <ul className="m-0 flex list-none flex-col gap-2 p-0">
+            {plan.limitations.map((limitation) => (
+              <li key={limitation} className="text-sub" style={{ color: "var(--t-ink-2)" }}>
+                {limitation}
+              </li>
+            ))}
+          </ul>
+        </Collapsible>
+      ) : null}
+
+      <Collapsible label="Rohfassung" hint="die Antwort, wie sie kam">
+        <pre
+          className="num m-0 overflow-x-auto text-micro"
+          style={{ color: "var(--t-ink-3)", whiteSpace: "pre-wrap" }}
+        >
+          {answer.text}
+        </pre>
+      </Collapsible>
+
+      <p className="num m-0 text-micro" style={{ color: "var(--t-ink-3)" }}>
+        {answer.model}
+        {answer.cached ? ` · gespeicherte Antwort vom ${formatDate(answer.created_at)}` : ""}
+        {" · noch "}
+        {answer.budget.remaining_eur.toFixed(2)} € im {answer.budget.month}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * One day: weekday, badge, duration and zone in the closed row; purpose,
+ * target heart rate and the confirmation behind the tap.
+ */
+function DayRow({
+  day,
+  result,
+  busy,
+  disabled,
+  onAdopt,
+}: {
+  day: PlanDay;
+  result: PlanAdoptResult | undefined;
+  busy: boolean;
+  disabled: boolean;
+  onAdopt: (options?: { replace?: boolean }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const tone = zoneTone(day);
+  const spec = daySpec(day);
+  const heartRate = formatHrTarget(day.target_hr_low, day.target_hr_high);
+  const clash = result !== undefined && !result.created && result.detail !== null;
+
+  return (
+    <div
+      style={{
+        borderRadius: "var(--r-lg)",
+        background: "var(--t-surface)",
+        boxShadow: "var(--sh-1)",
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((was) => !was)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 px-3 text-left"
+        style={{
+          minHeight: "var(--touch)",
+          border: "none",
+          background: "transparent",
+          color: "inherit",
+          font: "inherit",
+          borderRadius: "var(--r-lg)",
+        }}
+      >
+        <span className="flex flex-col items-center" style={{ width: "var(--sp-6)" }}>
+          <span className="label-micro" style={{ color: "var(--t-ink-3)" }}>
+            {day.weekday}
+          </span>
+          <span className="num text-sub" style={{ color: "var(--t-ink-2)" }}>
+            {formatDate(day.date)}
+          </span>
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="flex flex-wrap items-center gap-2">
+            <span
+              className="px-2 text-micro"
+              style={{ borderRadius: "var(--r-sm)", ...tone }}
+            >
+              {day.kind === "rest" ? "Ruhetag" : "Einheit"}
+            </span>
+            <span className="truncate text-body">{day.title}</span>
+          </span>
+          {spec ? (
+            <span className="num text-sub" style={{ color: "var(--t-ink-3)" }}>
+              {spec}
+            </span>
+          ) : null}
+        </span>
+        <Chevron open={open} />
+      </button>
+
+      {open ? (
+        <div className="flex flex-col gap-2 px-3 pb-3">
+          <p className="m-0 text-sub" style={{ color: "var(--t-ink-2)" }}>
+            {day.purpose}
+          </p>
+          {day.kind === "session" ? (
+            <p className="num m-0 text-micro" style={{ color: "var(--t-ink-3)" }}>
+              Zielherzfrequenz {heartRate ?? "—"}
+            </p>
+          ) : null}
+          {result?.created ? (
+            <p className="m-0 text-micro" style={{ color: "var(--st-good)" }}>
+              Angelegt und bestätigt — noch nicht an die Uhr gesendet.
+            </p>
+          ) : null}
+          {clash ? (
+            <p className="m-0 text-micro" style={{ color: "var(--st-caution)" }}>
+              {result?.detail}
+            </p>
+          ) : null}
+          {day.kind === "session" && !result?.created ? (
+            <div className="flex flex-wrap gap-2">
+              <PrimaryButton disabled={disabled} onClick={() => onAdopt()}>
+                {busy ? "Wird übernommen …" : "Bestätigen"}
+              </PrimaryButton>
+              {clash ? (
+                <SecondaryButton
+                  disabled={disabled}
+                  onClick={() => onAdopt({ replace: true })}
+                >
+                  Bestehende ersetzen
+                </SecondaryButton>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** A block that starts closed. Phosphor's caret, inline, on currentColor. */
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{
+        color: "var(--t-ink-3)",
+        flex: "none",
+        transform: open ? "rotate(180deg)" : undefined,
+      }}
+    >
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
+
+function Collapsible({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        onClick={() => setOpen((was) => !was)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 text-left"
+        style={{
+          minHeight: "var(--touch)",
+          border: "none",
+          background: "transparent",
+          color: "inherit",
+          font: "inherit",
+          padding: 0,
+        }}
+      >
+        <span className="flex flex-col">
+          <span className="text-sub" style={{ color: "var(--t-ink-2)" }}>
+            {label}
+          </span>
+          {hint ? (
+            <span className="text-micro" style={{ color: "var(--t-ink-3)" }}>
+              {hint}
+            </span>
+          ) : null}
+        </span>
+        <Chevron open={open} />
+      </button>
+      {open ? children : null}
     </div>
   );
 }

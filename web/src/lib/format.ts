@@ -100,3 +100,35 @@ export function formatTarget(
   ].filter((part): part is string => part !== null);
   return parts.length > 0 ? parts.join(" · ") : "ohne Vorgabe";
 }
+
+/**
+ * A planned duration, as a plan reads it: "40 min", "1:15 h".
+ *
+ * Not {@link formatDuration}, which writes mm:ss — on a training plan
+ * "40:00" reads as a pace, which is the one thing it must not.
+ */
+export function formatPlannedDuration(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined || Number.isNaN(seconds)) return "—";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")} h`;
+}
+
+/**
+ * A zone's heart rate window, with the open ends left open.
+ *
+ * Friel's zone 1 has no lower bound worth showing and zone 5 no upper one
+ * unless HFmax is configured, so the half that exists is written on its
+ * own rather than completed with a plausible number.
+ */
+export function formatHrTarget(
+  low: number | null | undefined,
+  high: number | null | undefined,
+): string | null {
+  if (low !== null && low !== undefined && high !== null && high !== undefined) {
+    return `${low}\u2013${high} bpm`;
+  }
+  if (low !== null && low !== undefined) return `ab ${low} bpm`;
+  if (high !== null && high !== undefined) return `bis ${high} bpm`;
+  return null;
+}
