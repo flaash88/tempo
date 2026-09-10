@@ -107,6 +107,25 @@ describe("a screen", () => {
   });
 });
 
+describe("a screen with a footer", () => {
+  const markup = renderToStaticMarkup(
+    <Screen title="Coach" footer={<div id="composer">Feld</div>}>
+      <p>Verlauf</p>
+    </Screen>,
+  );
+
+  it("puts the footer outside the scrolling area", () => {
+    // A sibling in normal flow, not an overlay: with the keyboard open
+    // the composer sits at the bottom of the visible window, and nothing
+    // of the conversation can end up underneath it.
+    const scroller = markup.indexOf("data-tempo-scroll");
+    const composer = markup.indexOf('id="composer"');
+
+    expect(composer).toBeGreaterThan(scroller);
+    expect(markup.slice(scroller, composer)).toContain("</div>");
+  });
+});
+
 describe("the tab bar", () => {
   const markup = renderToStaticMarkup(
     <MemoryRouter>
