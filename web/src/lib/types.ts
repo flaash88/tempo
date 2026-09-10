@@ -279,6 +279,53 @@ export type AiAnswer = {
   cost_eur: number;
 };
 
+/**
+ * One day of a generated week.
+ *
+ * The heart rates are the server's, derived from the athlete's own zone
+ * bounds — either end may be null rather than guessed, so the interface
+ * renders "bis 142" and "ab 168" instead of inventing the missing half.
+ */
+export type PlanDay = {
+  date: string;
+  weekday: string;
+  weekday_long: string;
+  kind: "session" | "rest";
+  title: string;
+  duration_s: number | null;
+  zone: number | null;
+  zone_label: string | null;
+  target_hr_low: number | null;
+  target_hr_high: number | null;
+  purpose: string;
+};
+
+export type WeekPlan = {
+  from_date: string;
+  to_date: string;
+  rationale: string;
+  days: PlanDay[];
+  limitations: string[];
+  hr_source: string | null;
+  hr_note: string | null;
+};
+
+/** The plan endpoint's answer: the structure, and the raw text behind it. */
+export type AiWeekPlan = AiAnswer & { plan: WeekPlan };
+
+export type PlanAdoptResult = {
+  date: string;
+  created: boolean;
+  workout: PlannedWorkout | null;
+  detail: string | null;
+};
+
+export type PlanAdoptResponse = {
+  results: PlanAdoptResult[];
+  created: number;
+  skipped: number;
+};
+
 export type CredentialStatus = { valid: boolean; last4: string | null };
 
 export type SettingsResponse = {

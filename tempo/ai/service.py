@@ -25,14 +25,23 @@ from sqlalchemy import Engine
 from tempo.ai import cache
 from tempo.ai.budget import BudgetState, record_call, require_budget
 from tempo.ai.client import AnthropicClient
-from tempo.ai.errors import AiAuthError
+from tempo.ai.errors import AiAuthError, AnswerFormatError
 from tempo.ai.features import FeatureDocument, activity_block, build_features
-from tempo.ai.prompts import history_messages, system_blocks, user_message
+from tempo.ai.prompts import (
+    history_messages,
+    repair_request,
+    system_blocks,
+    user_message,
+)
 from tempo.config import Settings
 
 log = logging.getLogger(__name__)
 
 AiClientFactory = Callable[[Settings], AnthropicClient]
+
+# Reads an answer and returns what is wrong with its shape, or None if
+# nothing is. German, because the sentence can reach the screen.
+AnswerValidator = Callable[[str], str | None]
 
 # Which model each task uses. Both come from the configuration; the mapping
 # only says which of the two configured models a task belongs to.
@@ -69,6 +78,11 @@ class AiAnswer:
     cache_read_tokens: int = 0
 
 
+def _problem(validator: AnswerValidator | None, text: str) -> str | None:
+    """What is wrong with an answer's shape, or None when nothing is."""
+    return None if validator is None else validator(text)
+
+
 def _document(
     engine: Engine,
     *,
@@ -95,6 +109,8 @@ def answer(
     question: str | None = None,
     history: Sequence[tuple[str, str]] = (),
     refresh: bool = False,
+    task_extra: str | None = None,
+    validator: AnswerValidator | None = None,
 ) -> AiAnswer | None:
     """Produce an answer, from the cache if one is stored and from the model if not.
 
@@ -102,6 +118,14 @@ def answer(
     exist. Raises :class:`~tempo.ai.errors.BudgetExceeded` when the month is
     spent — before the document is built, because a refused call should not
     cost a database sweep either.
+
+    ``validator`` is what makes a structured endpoint a contract rather
+    than a request. An answer that fails it is sent back once with the
+    problem named, and if the second attempt fails too the call raises
+    :class:`~tempo.ai.errors.AnswerFormatError` instead of handing an
+    interface something it cannot draw. Nothing that failed is stored, and
+    a stored answer that no longer validates — because the shape was
+    tightened since — is treated as a miss rather than served.
     """
     as_of = as_of or dt.datetime.now(tz=dt.UTC).date()
     model = model_for(task, settings)
@@ -111,7 +135,9 @@ def answer(
     if document is None:
         return None
 
-    system = system_blocks(task, athlete_profile=document.payload.get("athlete"))
+    system = system_blocks(
+        task, athlete_profile=document.payload.get("athlete"), extra=task_extra
+    )
     # The history is cut down before it is keyed on, so the cache sees what
     # would actually be sent rather than what was asked for.
     earlier = history_messages(
@@ -130,6 +156,11 @@ def answer(
 
     if not refresh:
         stored = cache.lookup(engine, key)
+        if stored is not None and _problem(validator, stored.answer) is not None:
+            # The shape changed under a stored answer. Serving it would put
+            # a body on the wire that the response model cannot build.
+            log.info("stored AI answer no longer validates", extra={"task": task})
+            stored = None
         if stored is not None:
             log.info("AI answer served from cache", extra={"task": task})
             return AiAnswer(
@@ -155,6 +186,33 @@ def answer(
         model=completion.model,
         usage=completion.usage,
     )
+
+    problem = _problem(validator, completion.text)
+    if problem is not None:
+        # One repair round, and one only. The budget is not re-checked
+        # here — the second call is part of answering the request that was
+        # already admitted — but it is recorded, so the month sees it.
+        log.warning(
+            "AI answer did not validate, asking once more", extra={"task": task}
+        )
+        repair = [
+            *messages,
+            {"role": "assistant", "content": completion.text},
+            repair_request(problem),
+        ]
+        with client_factory(settings) as client:
+            completion = client.complete(model=model, system=system, messages=repair)
+        cost += record_call(
+            engine,
+            endpoint=task,
+            model=completion.model,
+            usage=completion.usage,
+        )
+        problem = _problem(validator, completion.text)
+        if problem is not None:
+            log.error("AI answer still malformed after repair", extra={"task": task})
+            raise AnswerFormatError(problem)
+
     cache.store(
         engine,
         key=key,

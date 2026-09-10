@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from typing import Any
 
 import httpx
@@ -31,6 +31,7 @@ from tempo.ai.features import (
     build_features,
     external_text,
 )
+from tempo.ai.plan_week import plan_window
 from tempo.ai.prompts import (
     MAX_HISTORY_BYTES,
     TRUNCATION_MARKER,
@@ -84,6 +85,7 @@ class Recorder:
         self,
         *,
         text: str = CAUTIOUS_ANSWER,
+        replies: Sequence[str] | None = None,
         input_tokens: int = 1_200,
         output_tokens: int = 180,
         cache_read: int = 0,
@@ -91,6 +93,10 @@ class Recorder:
     ) -> None:
         self.requests: list[dict[str, Any]] = []
         self.text = text
+        # One answer per call, in order, for the cases where the second
+        # answer has to differ from the first. Past the end, ``text``
+        # stands in again.
+        self.replies = list(replies or ())
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
         self.cache_read = cache_read
@@ -100,10 +106,12 @@ class Recorder:
         self.requests.append(json.loads(request.content))
         if self.status_code != 200:
             return httpx.Response(self.status_code, json={"error": "nope"})
+        index = len(self.requests) - 1
+        reply = self.replies[index] if index < len(self.replies) else self.text
         return httpx.Response(
             200,
             json={
-                "content": [{"type": "text", "text": self.text}],
+                "content": [{"type": "text", "text": reply}],
                 "model": self.requests[-1]["model"],
                 "stop_reason": "end_turn",
                 "usage": {
@@ -543,14 +551,181 @@ def test_the_model_comes_from_the_configuration(configured: Settings) -> None:
     assert model_for("plan_week", other) == "claude-sonnet-5"
 
 
+# --- the week plan, as structure ---------------------------------------
+
+
+def week_plan(**overrides: Any) -> dict[str, Any]:
+    """A well-formed answer for the week the server is about to ask for."""
+    window = plan_window(today())
+    payload: dict[str, Any] = {
+        "rationale": "Erste Woche zurück. Kurz und locker, Ruhe dazwischen.",
+        "days": [
+            {
+                "date": day.isoformat(),
+                "kind": "rest" if index in (2, 5) else "session",
+                "title": "Ruhetag" if index in (2, 5) else "Lockerer Dauerlauf",
+                "duration_min": None if index in (2, 5) else 35,
+                "zone": None if index in (2, 5) else "Z2",
+                "purpose": (
+                    "Erholung." if index in (2, 5) else "Grundlage ohne Ermüdung."
+                ),
+            }
+            for index, day in enumerate(window)
+        ],
+        "limitations": ["Die Formkurve braucht 42 Tage, vorliegen 8."],
+    }
+    payload.update(overrides)
+    return payload
+
+
+def week_plan_text(**overrides: Any) -> str:
+    return json.dumps(week_plan(**overrides), ensure_ascii=False)
+
+
 def test_plan_week_uses_the_planning_model(
     client: TestClient, recorder: Recorder
 ) -> None:
+    recorder.text = week_plan_text()
+
     response = client.post("/api/ai/plan-week")
 
     assert response.status_code == 200
     assert recorder.requests[-1]["model"] == "claude-opus-5"
     assert response.json()["model"] == "claude-opus-5"
+
+
+def test_plan_week_answers_with_a_day_per_day(
+    client: TestClient, recorder: Recorder, open_session: Callable[[], Session]
+) -> None:
+    with open_session() as session:
+        seed_athlete(session)
+        session.commit()
+    recorder.text = week_plan_text()
+
+    body = client.post("/api/ai/plan-week").json()
+
+    plan = body["plan"]
+    window = plan_window(today())
+    assert [day["date"] for day in plan["days"]] == [day.isoformat() for day in window]
+    assert plan["from_date"] == window[0].isoformat()
+    assert plan["to_date"] == window[-1].isoformat()
+    assert plan["rationale"].startswith("Erste Woche")
+    assert plan["limitations"] == ["Die Formkurve braucht 42 Tage, vorliegen 8."]
+    # The raw answer stays reachable, but it is not the view.
+    assert body["text"] == recorder.text
+
+
+def test_the_contract_travels_with_the_request(
+    client: TestClient, recorder: Recorder
+) -> None:
+    recorder.text = week_plan_text()
+
+    client.post("/api/ai/plan-week")
+
+    system = recorder.last_system
+    for day in plan_window(today()):
+        assert day.isoformat() in system
+    assert "Zielherzfrequenzen trägst du nicht ein" in system
+
+
+def test_the_heart_rates_come_from_the_athlete_not_from_the_model(
+    client: TestClient, recorder: Recorder, open_session: Callable[[], Session]
+) -> None:
+    with open_session() as session:
+        seed_athlete(session)  # lthr 168
+        session.commit()
+    recorder.text = week_plan_text()
+
+    plan = client.post("/api/ai/plan-week").json()["plan"]
+
+    session_day = next(day for day in plan["days"] if day["kind"] == "session")
+    assert session_day["zone"] == 2
+    assert session_day["target_hr_low"] == round(0.85 * 168)
+    assert session_day["target_hr_high"] == round(0.90 * 168) - 1
+    assert plan["hr_source"] == "friel_run_lthr"
+    # Nothing that looks like a heart rate was ever asked of the model.
+    assert "target_hr" not in json.dumps(recorder.requests[-1])
+
+
+def test_a_rest_day_carries_neither_duration_nor_zone(
+    client: TestClient, recorder: Recorder
+) -> None:
+    recorder.text = week_plan_text()
+
+    plan = client.post("/api/ai/plan-week").json()["plan"]
+
+    rest = [day for day in plan["days"] if day["kind"] == "rest"]
+    assert len(rest) == 2
+    assert all(day["duration_s"] is None and day["zone"] is None for day in rest)
+
+
+def test_prose_is_asked_again_and_the_second_answer_stands(
+    client: TestClient, recorder: Recorder
+) -> None:
+    """The structure is enforced, not requested: a wrong shape costs a retry."""
+    recorder.replies = [CAUTIOUS_ANSWER, week_plan_text()]
+
+    response = client.post("/api/ai/plan-week")
+
+    assert response.status_code == 200
+    assert recorder.calls == 2
+    # The repair turn quotes what came back and says what was wrong with it.
+    repair = recorder.requests[-1]["messages"]
+    assert repair[-2]["role"] == "assistant"
+    assert repair[-2]["content"] == CAUTIOUS_ANSWER
+    assert "nicht das verlangte Format" in repair[-1]["content"]
+
+
+def test_a_second_malformed_answer_is_a_stated_failure(
+    client: TestClient, recorder: Recorder
+) -> None:
+    recorder.text = CAUTIOUS_ANSWER
+
+    response = client.post("/api/ai/plan-week")
+
+    assert response.status_code == 502
+    assert recorder.calls == 2
+    assert "Format" in response.json()["detail"]
+
+
+def test_only_one_repair_round_is_ever_spent(
+    client: TestClient, recorder: Recorder, engine: Engine
+) -> None:
+    client.post("/api/ai/plan-week")
+
+    assert recorder.calls == 2
+    # Both calls are on the month's bill; a retry is not free.
+    with session_factory(engine)() as session:
+        assert len(session.scalars(select(AiCall)).all()) == 2
+
+
+def test_a_malformed_answer_is_not_stored(
+    client: TestClient, recorder: Recorder, engine: Engine
+) -> None:
+    client.post("/api/ai/plan-week")
+
+    with session_factory(engine)() as session:
+        assert session.scalars(select(AiResponse)).all() == []
+
+
+def test_a_stored_answer_that_no_longer_fits_is_not_served(
+    client: TestClient, recorder: Recorder, engine: Engine
+) -> None:
+    """A cached answer from an older shape is a miss, not a broken screen."""
+    recorder.text = week_plan_text()
+    client.post("/api/ai/plan-week")
+    assert recorder.calls == 1
+
+    with session_factory(engine)() as session:
+        stored = session.scalars(select(AiResponse)).one()
+        stored.answer = CAUTIOUS_ANSWER
+        session.commit()
+
+    response = client.post("/api/ai/plan-week")
+
+    assert response.status_code == 200
+    assert recorder.calls == 2
+    assert response.json()["cached"] is False
 
 
 def test_chat_carries_the_question_and_nothing_else(

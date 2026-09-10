@@ -1324,6 +1324,99 @@ Was hier nicht steht, ist nicht entschieden.
   die Hülle einem geschrumpften Viewport folgt — nicht, dass WebKit ihn
   schrumpft.
 
+
+---
+
+## Der Wochenplan als Struktur, nicht als Prosa
+
+Die Wochenplanung lieferte inhaltlich brauchbare Ergebnisse in einem
+Fließtextblock über mehrere Bildschirmhöhen. Der einzelne Tag ging darin
+unter, und ein Vorschlag, den man nicht sehen kann, kann man auch nicht
+bestätigen — der Rückkanal aus Phase 6 lag daneben und war unerreichbar.
+
+### Erzwungen, nicht erbeten
+
+Ein Prompt, der um JSON bittet, bekommt meistens JSON. „Meistens" ist
+kein Vertrag, auf dem sich eine Oberfläche bauen lässt. Die Antwort wird
+deshalb serverseitig geprüft (`tempo/ai/plan_week.py`), und was
+durchfällt, wird **einmal** nachgefordert — mit der Angabe, was falsch
+war, und mit der Bitte um die ganze Antwort statt um das eine Feld: ein
+Modell, das ein Feld nachbessern soll, schickt gern nur dieses Feld, und
+eine halbe Antwort ist schwerer zu behandeln als eine falsche.
+
+Fällt auch die zweite durch, ist das ein `502` mit dem Grund im Klartext.
+Eine halb gezeichnete Woche wäre schlechter als eine benannte
+Fehlermeldung.
+
+- **Beide Aufrufe stehen auf der Rechnung.** Ein Wiederholungsversuch ist
+  nicht gratis, und ihn nicht zu buchen hieße, das Monatsbudget zu
+  belügen. Vor dem zweiten Aufruf wird das Budget nicht erneut geprüft:
+  er gehört zu einer Anfrage, die bereits zugelassen war.
+- **Nichts Fehlerhaftes wird gespeichert.** Und eine gespeicherte
+  Antwort, die die heutige Prüfung nicht mehr besteht, gilt als Fehltreffer
+  statt als Antwort — sonst hinge nach jeder Verschärfung der Struktur
+  eine unzeichenbare Woche im Cache.
+
+### Was das Modell nicht entscheidet
+
+- **Die sieben Daten.** Sie werden hier gerechnet und dem Modell als Teil
+  des Vertrags übergeben. Eine Antwort mit anderen Daten oder anderer
+  Reihenfolge ist ein Formatfehler. Das Modell wählt, was an einem Tag
+  passiert, nie welche Tage es gibt.
+- **Die Zielherzfrequenzen.** Das Modell nennt eine Zone; die
+  Herzfrequenz dazu kommt aus `tempo/metrics/zones.py` und den
+  Schwellenwerten des Athleten. Das ist die Regel „Die KI rechnet nichts"
+  und zugleich das Einzige, was dafür sorgt, dass die Zahl auf dem
+  Plan-Screen mit der Zahl im Rest der App übereinstimmt. Der
+  Formatvertrag verbietet ein `target_hr`-Feld; eine Antwort, die eins
+  mitschickt, fällt durch.
+- **Offene Enden bleiben offen.** Friels Zone 1 fängt bei null an, das ist
+  kein Ziel; Zone 5 hat keine Obergrenze außer HFmax, und die nur, wenn
+  sie hinterlegt ist. Die Oberfläche schreibt dann „bis 142 bpm" oder
+  „ab 168 bpm", statt die fehlende Hälfte plausibel zu erfinden.
+
+### Der Formatblock hängt hinter dem Cache-Breakpoint
+
+Er trägt die Daten der Woche und ändert sich damit täglich. Vor dem
+Breakpoint würde er das stabile Präfix jeden Tag entwerten.
+
+### Drei Blöcke, die getrennt bleiben
+
+Begründung, Tageszeile, Datenlage. Die Einschränkungen der Datenlage sind
+eine eigene Liste und stehen ausdrücklich nicht in den Tagestexten — genau
+diese Vermischung machte die Prosafassung unlesbar. Wer den Mittwoch
+liest, will den Mittwoch.
+
+Die Rohfassung bleibt erreichbar, aufklappbar, aber nicht als
+Standardansicht: nachsehen können, was das Modell tatsächlich geschickt
+hat, ist etwas anderes, als es vorgesetzt zu bekommen.
+
+### Übernehmen ist Bestätigen
+
+`POST /api/plan/workouts/adopt` legt einen generierten Tag an **und**
+bestätigt ihn in einem Schritt. Der Klick auf einen vorgeschlagenen Tag
+kann nichts anderes bedeuten; ihn danach noch einmal bestätigen zu lassen
+wäre eine Zustimmung zu derselben Sache in zwei Runden. Bis zur Uhr ist es
+von dort weiterhin ein eigener, ausdrücklicher Schritt — Phase 6 bleibt
+wie sie war.
+
+- **Ein Tag, der nicht geht, ist ein Ergebnis und kein Fehler.** Sonst
+  nähme ein belegter Mittwoch die übrigen sechs Tage mit.
+- **Überschrieben wird nur auf Ansage**, und was die Quelle besitzt, auch
+  dann nicht.
+- **Die Beschreibung baut der Server** aus Zone und Zweck. Der Client
+  schickt die geprüften Felder, nicht den fertigen Text — was im Kalender
+  des Athleten landet, soll aus dem stammen, was validiert wurde.
+
+### Falsifiziert
+
+Die Durchsetzung testweise ausgehängt (`problem = None` statt der
+Prüfung): vier Tests werden rot, darunter der, der Prosa erwartet und eine
+Nachforderung sehen will. Die Tagesliste testweise aufgeklappt gerendert:
+der Test, der den Zweck hinter dem Tippen verlangt, wird rot. Beides
+danach zurückgenommen.
+
+
 ### Über der Tastatur steht das Eingabefeld, nicht die Navigation
 
 - **Die Folge der Bindung, und sie war richtig erkannt:** die Hülle endet

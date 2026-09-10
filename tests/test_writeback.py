@@ -542,3 +542,123 @@ def test_a_transfer_left_in_flight_is_not_started_again(
         push_workout(engine, configured, entry.id, client_factory=calendar.factory())
 
     assert calendar.calls == 0
+
+
+# --- taking a generated week into the calendar -------------------------
+
+
+def an_adopted_day(**overrides: Any) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "date": tomorrow().isoformat(),
+        "title": "Lockerer Dauerlauf",
+        "duration_s": 2_400,
+        "zone_label": "Z2",
+        "purpose": "Grundlage aufbauen ohne Ermüdung.",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_adopting_a_day_confirms_it_but_sends_nothing(
+    client: TestClient, calendar: Calendar, open_session: Callable[[], Session]
+) -> None:
+    """The click is the confirmation. The watch is still a separate act."""
+    response = client.post(
+        "/api/plan/workouts/adopt", json={"days": [an_adopted_day()]}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["created"] == 1 and body["skipped"] == 0
+    workout = body["results"][0]["workout"]
+    assert workout["sync"]["confirmed_at"] is not None
+    assert workout["sync"]["status"] == "not_sent"
+    assert calendar.calls == 0
+
+
+def test_the_description_is_built_from_the_zone_and_the_purpose(
+    client: TestClient,
+) -> None:
+    body = client.post(
+        "/api/plan/workouts/adopt", json={"days": [an_adopted_day()]}
+    ).json()
+
+    workout = body["results"][0]["workout"]
+    assert workout["name"] == "Lockerer Dauerlauf"
+    assert workout["description"] == ("Zielzone Z2. Grundlage aufbauen ohne Ermüdung.")
+    assert workout["target_time_s"] == 2_400
+
+
+def test_the_whole_week_is_one_request(client: TestClient) -> None:
+    days = [
+        an_adopted_day(date=(tomorrow() + dt.timedelta(days=offset)).isoformat())
+        for offset in range(5)
+    ]
+
+    body = client.post("/api/plan/workouts/adopt", json={"days": days}).json()
+
+    assert body["created"] == 5
+    assert all(result["created"] for result in body["results"])
+
+
+def test_a_day_that_is_taken_does_not_take_the_week_down_with_it(
+    client: TestClient, engine: Engine
+) -> None:
+    """One refused Wednesday must not cost the other six days."""
+    clash = tomorrow() + dt.timedelta(days=1)
+    taken = propose_workout(engine, a_proposal(date=clash))
+    confirm_workout(engine, taken.id)
+    days = [
+        an_adopted_day(date=(tomorrow() + dt.timedelta(days=offset)).isoformat())
+        for offset in range(3)
+    ]
+
+    body = client.post("/api/plan/workouts/adopt", json={"days": days}).json()
+
+    assert body["created"] == 2
+    assert body["skipped"] == 1
+    refused = next(
+        result for result in body["results"] if result["date"] == clash.isoformat()
+    )
+    assert refused["created"] is False
+    assert "bestätigte Einheit" in refused["detail"]
+    assert refused["workout"] is None
+
+
+def test_nothing_the_source_owns_is_overwritten_even_with_replace(
+    client: TestClient, open_session: Callable[[], Session]
+) -> None:
+    with open_session() as session:
+        seed_source_event(session, tomorrow())
+        session.commit()
+
+    body = client.post(
+        "/api/plan/workouts/adopt",
+        json={"days": [an_adopted_day()], "replace": True},
+    ).json()
+
+    assert body["created"] == 0
+    assert body["results"][0]["detail"] is not None
+
+
+def test_a_day_in_the_past_is_reported_not_created(client: TestClient) -> None:
+    long_ago = (dt.datetime.now(tz=dt.UTC).date() - dt.timedelta(days=30)).isoformat()
+
+    body = client.post(
+        "/api/plan/workouts/adopt", json={"days": [an_adopted_day(date=long_ago)]}
+    ).json()
+
+    assert body["created"] == 0
+    assert "Vergangenheit" in body["results"][0]["detail"]
+
+
+def test_adopting_needs_a_session(configured: Settings, calendar: Calendar) -> None:
+    with TestClient(
+        create_app(configured, client_factory=calendar.factory()),
+        base_url="https://testserver",
+    ) as anonymous:
+        response = anonymous.post(
+            "/api/plan/workouts/adopt", json={"days": [an_adopted_day()]}
+        )
+
+    assert response.status_code == 401
