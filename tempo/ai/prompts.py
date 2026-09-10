@@ -105,7 +105,8 @@ in die Woche fügt, was daran auffällt. Keine Bewertung der Person.""",
     "plan_week": """\
 Aufgabe: Entwirf die kommende Woche. Nenne je Tag Einheit oder Ruhe, mit \
 Dauer, Zielzone und Zweck. Halte die Wochenlast im Rahmen dessen, was die \
-bisherige Belastung hergibt, und sage, worauf du dich dabei stützt.""",
+bisherige Belastung hergibt, und sage, worauf du dich dabei stützt. Das \
+Antwortformat steht im nächsten Block und geht der Stilregel vor.""",
     "chat": """\
 Aufgabe: Beantworte die Frage des Athleten ausschließlich aus den \
 mitgelieferten Daten. Was die Daten nicht hergeben, beantwortest du nicht \
@@ -119,6 +120,7 @@ def system_blocks(
     task: str,
     *,
     athlete_profile: dict[str, Any] | None = None,
+    extra: str | None = None,
     cache: bool = True,
 ) -> list[dict[str, Any]]:
     """The system prompt, as blocks, with the stable part marked cacheable.
@@ -140,7 +142,13 @@ def system_blocks(
     if cache:
         stable["cache_control"] = {"type": "ephemeral"}
 
-    return [stable, {"type": "text", "text": TASKS[task]}]
+    blocks: list[dict[str, Any]] = [stable, {"type": "text", "text": TASKS[task]}]
+    if extra:
+        # Uncached on purpose: a format contract that carries the week's
+        # dates changes every day, and a changing block behind the
+        # breakpoint would invalidate the prefix it sits behind.
+        blocks.append({"type": "text", "text": extra})
+    return blocks
 
 
 def _profile_text(profile: dict[str, Any]) -> str:
@@ -212,3 +220,20 @@ def user_message(features_json: str, question: str | None = None) -> dict[str, A
     if question:
         text += f"\n\nFrage des Athleten:\n{question.strip()}"
     return {"role": "user", "content": text}
+
+
+def repair_request(problem: str) -> dict[str, Any]:
+    """The one follow-up sent when an answer did not have the right shape.
+
+    It names what was wrong and asks for the whole answer again rather
+    than a patch: a model asked to fix one field tends to send that field
+    on its own, and half an answer is harder to handle than a wrong one.
+    """
+    return {
+        "role": "user",
+        "content": (
+            "Deine Antwort hatte nicht das verlangte Format. "
+            f"{problem} Schicke die vollständige Antwort noch einmal, "
+            "genau im beschriebenen Format und ohne weiteren Text."
+        ),
+    }

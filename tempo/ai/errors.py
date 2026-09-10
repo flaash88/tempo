@@ -48,3 +48,12 @@ class BudgetExceeded(AiError):
 
 class FeaturesTooLarge(AiError):
     """The feature document did not fit its size limit even after trimming."""
+
+
+class AnswerFormatError(AiError):
+    """The answer did not have the shape its endpoint requires.
+
+    Raised only after the one repair attempt has also failed. Carries a
+    German sentence naming what was wrong, because that sentence reaches
+    the screen.
+    """
