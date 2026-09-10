@@ -21,13 +21,14 @@
  * The same divergence appears when the iOS keyboard opens: the visual
  * viewport shrinks from the bottom while the layout viewport does not.
  * The binding handles that case by construction, which is the other
- * reason not to solve this by forbidding zoom.
+ * reason not to solve this by forbidding zoom — and it is also how the
+ * keyboard is detected here, see `keyboardInset`.
  *
  * Without `visualViewport` nothing is set and the CSS falls back to
  * `inset: 0`, which is the behaviour every other engine wants.
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export const SHELL_ID = "root";
 
@@ -42,6 +43,34 @@ type Measurements = {
   scale: number;
 };
 
+/**
+ * How much of the visible window something is covering from below.
+ *
+ * Zoom shrinks the visual viewport too, so the reported height is scaled
+ * back up before it is compared: at zoom 2 a 426px visual viewport is the
+ * whole 852px page, and nothing is covering anything. What is left after
+ * that is the keyboard — or the dictation bar, which behaves the same way
+ * and should be treated the same way.
+ *
+ * Deliberately not derived from focus events. A field can be focused with
+ * an external keyboard attached, where nothing covers the screen and the
+ * tab bar should stay; and dictation covers the screen without a focus
+ * event of its own. The geometry knows; the events guess.
+ */
+export function keyboardInset(view: VisualViewport, layoutHeight: number): number {
+  return Math.max(0, Math.round(layoutHeight - view.height * view.scale));
+}
+
+// Opening and closing use different thresholds, so a keyboard animating
+// through the boundary cannot make the bar flicker. Both are far above
+// any accessory bar and far below any keyboard.
+export const KEYBOARD_OPENS_AT = 120;
+export const KEYBOARD_CLOSES_AT = 80;
+
+export function keyboardIsOpen(inset: number, wasOpen: boolean): boolean {
+  return wasOpen ? inset > KEYBOARD_CLOSES_AT : inset > KEYBOARD_OPENS_AT;
+}
+
 export function measureVisualViewport(view: VisualViewport): Measurements {
   return {
     top: view.offsetTop,
@@ -52,31 +81,54 @@ export function measureVisualViewport(view: VisualViewport): Measurements {
   };
 }
 
-export function applyMeasurements(shell: HTMLElement, values: Measurements): void {
+export function applyMeasurements(
+  shell: HTMLElement,
+  values: Measurements,
+  inset = 0,
+): void {
   shell.style.setProperty("--vv-top", `${values.top}px`);
   shell.style.setProperty("--vv-left", `${values.left}px`);
   shell.style.setProperty("--vv-width", `${values.width}px`);
   shell.style.setProperty("--vv-height", `${values.height}px`);
+  shell.style.setProperty("--kb-inset", `${inset}px`);
   shell.setAttribute(BOUND_ATTRIBUTE, "");
 }
 
 export function releaseShell(shell: HTMLElement): void {
   shell.removeAttribute(BOUND_ATTRIBUTE);
-  for (const name of ["--vv-top", "--vv-left", "--vv-width", "--vv-height"]) {
+  for (const name of ["--vv-top", "--vv-left", "--vv-width", "--vv-height", "--kb-inset"]) {
     shell.style.removeProperty(name);
   }
 }
 
-export function useVisualViewportShell(): void {
+export type ViewportState = {
+  /** Pixels covered from below — the keyboard, or dictation. */
+  keyboardInset: number;
+  keyboardOpen: boolean;
+};
+
+export const CLOSED: ViewportState = { keyboardInset: 0, keyboardOpen: false };
+
+export function useVisualViewportShell(): ViewportState {
+  const [state, setState] = useState<ViewportState>(CLOSED);
+
   useEffect(() => {
     const view = window.visualViewport;
     const shell = document.getElementById(SHELL_ID);
     if (!view || !shell) return;
 
     let frame = 0;
+    let open = false;
     const apply = () => {
       frame = 0;
-      applyMeasurements(shell, measureVisualViewport(view));
+      const inset = keyboardInset(view, window.innerHeight);
+      open = keyboardIsOpen(inset, open);
+      applyMeasurements(shell, measureVisualViewport(view), inset);
+      setState((previous) =>
+        previous.keyboardInset === inset && previous.keyboardOpen === open
+          ? previous
+          : { keyboardInset: inset, keyboardOpen: open },
+      );
     };
     // Pinching fires these continuously; one write per frame is enough
     // and keeps the reflow off the gesture's critical path.
@@ -99,4 +151,6 @@ export function useVisualViewportShell(): void {
       releaseShell(shell);
     };
   }, []);
+
+  return state;
 }

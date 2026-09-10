@@ -14,43 +14,57 @@ export function Screen({
   title,
   subtitle,
   children,
+  footer,
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
+  /**
+   * Pinned below the scrolling area, inside the shell.
+   *
+   * A sibling in normal flow, not an overlay: content cannot end up
+   * underneath something that takes its own space. The Coach screen's
+   * composer is the one that needs this — with the keyboard open it has
+   * to sit at the bottom of the visible window while the conversation
+   * scrolls above it.
+   */
+  footer?: ReactNode;
 }) {
   return (
-    <div
-      data-tempo-scroll
-      // The height and the scrolling come from the [data-tempo-scroll]
-      // rule: this is the flex child that fills the shell, and it is the
-      // only thing on the screen that scrolls. It must not be a
-      // min-height box — one of those grows with its content, never
-      // scrolls itself, and hands the scrolling to the document, which is
-      // where iOS starts moving the fixed tab bar around.
-      className="flex flex-col gap-4"
-      style={{
-        paddingTop: "calc(var(--inset-top) + var(--sp-4))",
-        // No room reserved for the tab bar any more: it is a sibling in
-        // normal flow below this box, not something floating over it.
-        // What is left is breathing room at the end of the list.
-        paddingBottom: "var(--sp-6)",
-        paddingLeft: "calc(var(--inset-left) + var(--sp-4))",
-        paddingRight: "calc(var(--inset-right) + var(--sp-4))",
-      }}
-    >
-      <header className="flex flex-col gap-1">
-        <h1 className="m-0 text-metric-xs" style={{ fontWeight: 500 }}>
-          {title}
-        </h1>
-        {subtitle ? (
-          <p className="num m-0 text-sub" style={{ color: "var(--t-ink-3)" }}>
-            {subtitle}
-          </p>
-        ) : null}
-      </header>
-      {children}
-    </div>
+    <>
+      <div
+        data-tempo-scroll
+        // The height and the scrolling come from the [data-tempo-scroll]
+        // rule: this is the flex child that fills the shell, and it is the
+        // only thing on the screen that scrolls. It must not be a
+        // min-height box — one of those grows with its content, never
+        // scrolls itself, and hands the scrolling to the document, which is
+        // where iOS starts moving the fixed tab bar around.
+        className="flex flex-col gap-4"
+        style={{
+          paddingTop: "calc(var(--inset-top) + var(--sp-4))",
+          // No room reserved for the tab bar any more: it is a sibling in
+          // normal flow below this box, not something floating over it.
+          // What is left is breathing room at the end of the list.
+          paddingBottom: "var(--sp-6)",
+          paddingLeft: "calc(var(--inset-left) + var(--sp-4))",
+          paddingRight: "calc(var(--inset-right) + var(--sp-4))",
+        }}
+      >
+        <header className="flex flex-col gap-1">
+          <h1 className="m-0 text-metric-xs" style={{ fontWeight: 500 }}>
+            {title}
+          </h1>
+          {subtitle ? (
+            <p className="num m-0 text-sub" style={{ color: "var(--t-ink-3)" }}>
+              {subtitle}
+            </p>
+          ) : null}
+        </header>
+        {children}
+      </div>
+      {footer}
+    </>
   );
 }
 

@@ -13,7 +13,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BOUND_ATTRIBUTE,
+  KEYBOARD_CLOSES_AT,
+  KEYBOARD_OPENS_AT,
   applyMeasurements,
+  keyboardInset,
+  keyboardIsOpen,
   measureVisualViewport,
   releaseShell,
 } from "./visualViewport";
@@ -103,5 +107,60 @@ describe("applying", () => {
 
     expect(root.hasAttribute(BOUND_ATTRIBUTE)).toBe(false);
     expect(root.style.getPropertyValue("--vv-height")).toBe("");
+  });
+});
+
+
+describe("noticing the keyboard", () => {
+  const LAYOUT = 852;
+
+  it("sees nothing covering an untouched window", () => {
+    expect(keyboardInset(viewport({}), LAYOUT)).toBe(0);
+  });
+
+  it("measures what covers the window from below", () => {
+    expect(keyboardInset(viewport({ height: LAYOUT - 320 }), LAYOUT)).toBe(320);
+  });
+
+  it("is not fooled by zoom", () => {
+    // At zoom 2 the visual viewport is half the page and nothing is
+    // covering anything. Comparing the raw heights would call that a
+    // 426px keyboard.
+    const zoomed = viewport({ height: 426, scale: 2 });
+
+    expect(keyboardInset(zoomed, LAYOUT)).toBe(0);
+  });
+
+  it("still finds the keyboard under zoom", () => {
+    // Zoomed to 2 with a 320px keyboard: (852 - 320) / 2 = 266.
+    const both = viewport({ height: 266, scale: 2 });
+
+    expect(keyboardInset(both, LAYOUT)).toBe(320);
+  });
+
+  it("ignores an accessory bar, notices a keyboard", () => {
+    // An external keyboard leaves the screen alone or shows only a small
+    // suggestion strip; the tab bar should stay in both cases.
+    expect(keyboardIsOpen(0, false)).toBe(false);
+    expect(keyboardIsOpen(44, false)).toBe(false);
+    expect(keyboardIsOpen(320, false)).toBe(true);
+  });
+
+  it("holds its answer through the animation", () => {
+    // Opening and closing use different thresholds, so a keyboard sliding
+    // through the boundary cannot make the bar flicker in and out.
+    expect(KEYBOARD_CLOSES_AT).toBeLessThan(KEYBOARD_OPENS_AT);
+    const between = (KEYBOARD_OPENS_AT + KEYBOARD_CLOSES_AT) / 2;
+
+    expect(keyboardIsOpen(between, true)).toBe(true);
+    expect(keyboardIsOpen(between, false)).toBe(false);
+  });
+
+  it("writes the inset out for the layout to use", () => {
+    const root = shell();
+
+    applyMeasurements(root, measureVisualViewport(viewport({ height: 532 })), 320);
+
+    expect(root.style.getPropertyValue("--kb-inset")).toBe("320px");
   });
 });

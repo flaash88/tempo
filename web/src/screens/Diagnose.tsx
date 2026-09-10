@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card, PrimaryButton, SecondaryButton, TileHeader } from "../components/Tile";
 import { Screen } from "../components/Chrome";
+import { keyboardInset, keyboardIsOpen } from "../lib/visualViewport";
 
 type Snapshot = {
   gemessen: string;
@@ -47,6 +48,9 @@ type Snapshot = {
     differenzLayoutZuVisuell: number | null;
     /** True while the two viewports disagree — zoomed, or keyboard open. */
     viewportsWeichenAb: boolean;
+    /** What is covering the window from below, zoom taken out. */
+    tastaturHoehe: number;
+    tastaturOffen: boolean;
     documentClientHeight: number;
     documentScrollHeight: number;
     documentScrollTop: number;
@@ -165,6 +169,10 @@ function take(): Snapshot {
         ? Math.abs(window.innerHeight - view.height) > 1 ||
           Math.abs(view.offsetTop) > 1 ||
           Math.abs(view.scale - 1) > 0.01
+        : false,
+      tastaturHoehe: view ? keyboardInset(view, window.innerHeight) : 0,
+      tastaturOffen: view
+        ? keyboardIsOpen(keyboardInset(view, window.innerHeight), false)
         : false,
       documentClientHeight: doc.clientHeight,
       documentScrollHeight: doc.scrollHeight,
