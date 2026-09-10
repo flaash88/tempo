@@ -43,6 +43,10 @@ type Snapshot = {
     visualViewportOffsetTop: number | null;
     visualViewportOffsetLeft: number | null;
     visualViewportScale: number | null;
+    /** Layout minus visual. Anything but 0 is the divergence that broke this. */
+    differenzLayoutZuVisuell: number | null;
+    /** True while the two viewports disagree — zoomed, or keyboard open. */
+    viewportsWeichenAb: boolean;
     documentClientHeight: number;
     documentScrollHeight: number;
     documentScrollTop: number;
@@ -78,6 +82,8 @@ type Snapshot = {
     streifenDarunter: number | null;
     /** The band between the bar's bottom edge and the bottom of the screen. */
     streifenUnterDerLeiste: number | null;
+    /** Set once lib/visualViewport.ts has measured and taken over. */
+    anVisualViewportGebunden: boolean;
   };
   scroller: {
     anzahl: number;
@@ -117,7 +123,10 @@ function take(): Snapshot {
   const shell = document.getElementById("root");
   const bar = nav?.getBoundingClientRect() ?? null;
   const shellBox = shell?.getBoundingClientRect() ?? null;
-  const visibleBottom = view?.height ?? window.innerHeight;
+  // The bottom of what can be seen, in the same coordinates the boxes
+  // above are measured in — offsetTop matters as soon as the page is
+  // zoomed and panned.
+  const visibleBottom = view ? view.offsetTop + view.height : window.innerHeight;
 
   const scrollers = [...document.querySelectorAll<HTMLElement>("*")].filter((el) => {
     const style = getComputedStyle(el);
@@ -149,6 +158,14 @@ function take(): Snapshot {
       visualViewportOffsetTop: view ? Math.round(view.offsetTop * 100) / 100 : null,
       visualViewportOffsetLeft: view ? Math.round(view.offsetLeft * 100) / 100 : null,
       visualViewportScale: view ? view.scale : null,
+      differenzLayoutZuVisuell: view
+        ? Math.round((window.innerHeight - view.height) * 100) / 100
+        : null,
+      viewportsWeichenAb: view
+        ? Math.abs(window.innerHeight - view.height) > 1 ||
+          Math.abs(view.offsetTop) > 1 ||
+          Math.abs(view.scale - 1) > 0.01
+        : false,
       documentClientHeight: doc.clientHeight,
       documentScrollHeight: doc.scrollHeight,
       documentScrollTop: Math.round(doc.scrollTop),
@@ -183,6 +200,7 @@ function take(): Snapshot {
       streifenUnterDerLeiste: bar
         ? Math.round((visibleBottom - bar.bottom) * 100) / 100
         : null,
+      anVisualViewportGebunden: shell !== null && shell.hasAttribute("data-vv"),
     },
     scroller: {
       anzahl: scrollers.length,
@@ -210,6 +228,18 @@ function verdict(snapshot: Snapshot): { text: string; tone: string } {
   const shellGap = snapshot.huelle.streifenDarunter;
   if (gap === null) return { text: "Keine Tab-Leiste gefunden.", tone: "var(--st-warn)" };
 
+  if (snapshot.hoehen.viewportsWeichenAb && !snapshot.huelle.anVisualViewportGebunden) {
+    // The cause, named: the shell is following the laid-out page while
+    // the visible window is somewhere else.
+    return {
+      text:
+        `Layout- und sichtbarer Viewport weichen um ` +
+        `${snapshot.hoehen.differenzLayoutZuVisuell} px ab (Zoom ` +
+        `${snapshot.hoehen.visualViewportScale}), und die Hülle folgt dem ` +
+        `Layout-Viewport. Genau dann wird oben abgeschnitten und unten bleibt ein Streifen.`,
+      tone: "var(--st-warn)",
+    };
+  }
   if (shellGap !== null && Math.abs(shellGap) > 1) {
     // The reported fault: the shell stops short and leaves a band. It is
     // painted in the bar's colour now, so it is not visible — but it is
