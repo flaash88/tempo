@@ -49,6 +49,15 @@ const TOUCH = 44;
 // colour: enough for the blur behind the bar, far less than the step
 // between the page ground and the bar's.
 const COLOUR_TOLERANCE = 6;
+// Zoom levels every screen is measured at. The fault only appears above
+// 1.0: the layout viewport stays the whole page while the visual one
+// shrinks, and a shell that follows the first reaches past the second.
+// A run at 1.0 alone is a run that stops before the fault — which is
+// what the previous one did.
+const ZOOMS = [1, 1.5, 2];
+// How far the iOS keyboard shrinks the visual viewport from below, near
+// enough. Simulated, see the note where it is used.
+const KEYBOARD_HEIGHT = 320;
 // The bar's reference colour is read above its safe-area padding, so the
 // sample sits in the row the labels are in rather than in the strip the
 // home indicator occupies.
@@ -86,14 +95,37 @@ const SCREENS = [
  * A check that cannot be made to fail is not a check.
  */
 const SIMULATED_STRIP = Number(process.env.TEMPO_SIMULATE_STRIP ?? 0);
+/**
+ * Neutralise the binding, leaving the shell on inset: 0.
+ *
+ * That is the behaviour before this fix, and the zoom passes must go red
+ * under it — otherwise the zoom checks are unfalsifiable here, which is
+ * the trap the 1.0-only run fell into.
+ *
+ * Deliberately CSS rather than deleting window.visualViewport: taking the
+ * API away would also blind the audit's own measurements, and a check
+ * that loses its reference along with the feature proves nothing. Tried
+ * that first; it reported "Zoom 1" at page scale 2.
+ */
+const UNBIND_CSS =
+  process.env.TEMPO_DISABLE_VV === "1"
+    ? "#root[data-vv]{inset:0!important;top:auto!important;left:auto!important;" +
+      "width:auto!important;height:auto!important}"
+    : "";
 const simulationCss = SIMULATED_STRIP
-  ? `#root{bottom:${SIMULATED_STRIP}px!important}`
+  ? `#root{bottom:${SIMULATED_STRIP}px!important}` +
+    // The bound shell sets its own height, so shortening it by moving
+    // `bottom` no longer reaches it. Caught by this run going green when
+    // it had to stay red — a simulation that stops simulating is the
+    // same failure as a check that stops checking.
+    `#root[data-vv]{height:calc(var(--vv-height) - ${SIMULATED_STRIP}px)!important}`
   : "";
 
 const insetCss = (insets) =>
   `:root{--inset-top:${insets.top}px!important;--inset-bottom:${insets.bottom}px!important;` +
   `--inset-left:${insets.left}px!important;--inset-right:${insets.right}px!important}` +
-  simulationCss;
+  simulationCss +
+  UNBIND_CSS;
 
 await mkdir(OUT, { recursive: true });
 
@@ -148,9 +180,26 @@ async function inspect(page, { tabbar, touch, insets }) {
   return page.evaluate(
     ({ tabbar, touch, insets }) => {
       const out = { problems: [] };
-      const vh = window.innerHeight;
-      const vw = window.innerWidth;
       const doc = document.scrollingElement ?? document.documentElement;
+
+      // Everything about the bottom edge is measured against the *visual*
+      // viewport, not innerHeight. At any zoom other than 1 those are two
+      // different things, and innerHeight is the wrong one: it is the
+      // layout viewport, which is exactly what the shell used to follow
+      // and what left a band below the bar. Measuring against it would
+      // have kept the audit green through the whole fault.
+      const view = window.visualViewport;
+      const vw = view ? view.width : window.innerWidth;
+      const visualTop = view ? view.offsetTop : 0;
+      const visualBottom = view ? view.offsetTop + view.height : window.innerHeight;
+      const vh = visualBottom - visualTop;
+      out.visual = {
+        top: Math.round(visualTop),
+        bottom: Math.round(visualBottom),
+        height: Math.round(vh),
+        scale: view ? Math.round(view.scale * 100) / 100 : 1,
+        layoutHeight: window.innerHeight,
+      };
 
       // 1. The document must not scroll. If it does, whatever sits at the
       //    bottom is riding on a moving surface.
@@ -189,18 +238,22 @@ async function inspect(page, { tabbar, touch, insets }) {
         bottom: Math.round(shellBox.bottom),
         height: Math.round(shellBox.height),
         position: getComputedStyle(shell).position,
+        gebunden: shell.hasAttribute("data-vv"),
       };
-      if (Math.abs(shellBox.height - vh) > 1) {
-        out.problems.push(`Hülle ${Math.round(shellBox.height)} hoch statt ${vh}`);
-      }
-      if (Math.abs(shellBox.bottom - vh) > 1) {
+      if (Math.abs(shellBox.top - visualTop) > 1) {
         out.problems.push(
-          `Hülle endet bei ${Math.round(shellBox.bottom)}, sichtbar bis ${vh} — ` +
-            `${Math.round(vh - shellBox.bottom)}px Streifen darunter`,
+          `Hülle beginnt bei ${Math.round(shellBox.top)}, sichtbar ab ${Math.round(visualTop)}` +
+            ` — ${Math.round(visualTop - shellBox.top)}px oben abgeschnitten`,
         );
       }
-      if (Math.abs(shellBox.top) > 1) {
-        out.problems.push(`Hülle beginnt bei ${Math.round(shellBox.top)} statt 0`);
+      if (Math.abs(shellBox.bottom - visualBottom) > 1) {
+        out.problems.push(
+          `Hülle endet bei ${Math.round(shellBox.bottom)}, sichtbar bis ${Math.round(visualBottom)}` +
+            ` — ${Math.round(visualBottom - shellBox.bottom)}px Streifen darunter`,
+        );
+      }
+      if (Math.abs(shellBox.height - vh) > 1) {
+        out.problems.push(`Hülle ${Math.round(shellBox.height)} hoch statt ${Math.round(vh)}`);
       }
 
       // 4. The bar sits on the bottom edge, whatever the content length.
@@ -216,24 +269,32 @@ async function inspect(page, { tabbar, touch, insets }) {
         height: Math.round(bar.height),
         position: getComputedStyle(nav).position,
       };
-      if (Math.abs(bar.bottom - vh) > 1) {
-        out.problems.push(`Leiste endet bei ${Math.round(bar.bottom)}, sichtbar bis ${vh}`);
+      if (Math.abs(bar.bottom - visualBottom) > 1) {
+        out.problems.push(
+          `Leiste endet bei ${Math.round(bar.bottom)}, sichtbar bis ${Math.round(visualBottom)}`,
+        );
       }
       if (Math.abs(bar.height - (tabbar + insets.bottom)) > 1) {
         out.problems.push(`Leistenhöhe ${Math.round(bar.height)} statt ${tabbar + insets.bottom}`);
       }
       // The labels must clear the home indicator's strip.
       const label = nav.querySelector("span");
-      if (label && label.getBoundingClientRect().bottom > vh - insets.bottom + 0.5) {
+      if (label && label.getBoundingClientRect().bottom > visualBottom - insets.bottom + 0.5) {
         out.problems.push("Beschriftung ragt in den Home-Indicator");
       }
 
       // 4b. Whatever lies between the bar's bottom edge and the bottom of
       //     the screen must be the bar. Anything else — the shell, the
       //     body, nothing at all — is a strip the page shows through.
-      out.strip = { from: Math.round(bar.bottom), to: vh, uncovered: [] };
-      for (let y = Math.ceil(bar.bottom) + 1; y < vh; y += 2) {
-        for (const x of [2, Math.round(vw / 2), vw - 3]) {
+      const visualLeft = view ? view.offsetLeft : 0;
+      const sampleX = [
+        visualLeft + 2,
+        Math.round(visualLeft + vw / 2),
+        Math.round(visualLeft + vw - 3),
+      ];
+      out.strip = { from: Math.round(bar.bottom), to: Math.round(visualBottom), uncovered: [] };
+      for (let y = Math.ceil(bar.bottom) + 1; y < visualBottom; y += 2) {
+        for (const x of sampleX) {
           const el = document.elementFromPoint(x, y);
           const covered = el !== null && (el === nav || nav.contains(el));
           if (!covered) {
@@ -247,16 +308,19 @@ async function inspect(page, { tabbar, touch, insets }) {
         );
       }
 
-      // 5. Nothing horizontal.
-      if (doc.scrollWidth > vw + 1) {
-        out.problems.push(`horizontaler Overflow: ${doc.scrollWidth} > ${vw}`);
+      // 5. Nothing horizontal — measured against the layout viewport.
+      //    Panning sideways at a zoom above 1 is the point of zooming;
+      //    what must not happen is the document being wider than the
+      //    page itself.
+      if (doc.scrollWidth > window.innerWidth + 1) {
+        out.problems.push(`horizontaler Overflow: ${doc.scrollWidth} > ${window.innerWidth}`);
       }
 
       // 6. Tap targets, and nothing hiding under the home indicator.
       const interactive = [...document.querySelectorAll("button, a, input, textarea, [role=tab]")];
       const onScreen = interactive
         .map((el) => ({ el, r: el.getBoundingClientRect() }))
-        .filter(({ r }) => r.width > 0 && r.top < vh);
+        .filter(({ r }) => r.width > 0 && r.top < visualBottom);
 
       out.small = onScreen
         .filter(({ el }) => {
@@ -269,9 +333,19 @@ async function inspect(page, { tabbar, touch, insets }) {
         .map(({ el, r }) => `${el.tagName} "${(el.textContent || "").trim().slice(0, 24)}" ${Math.round(r.height)}px`);
       if (out.small.length) out.problems.push(`${out.small.length} Tap-Ziel(e) unter ${touch}pt`);
 
-      const guard = vh - insets.bottom;
+      const guard = visualBottom - insets.bottom;
       out.underIndicator = onScreen
-        .filter(({ el, r }) => r.bottom > guard && !nav.contains(el))
+        .filter(({ el, r }) => {
+          if (nav.contains(el) || r.bottom <= guard) return false;
+          // Overlapping the band on paper is not the same as being seen
+          // in it: the screen clips what runs past its bottom, and the
+          // bar covers the band itself. So ask what is actually painted
+          // at the point in question.
+          const y = Math.min(Math.max(guard + 2, r.top + 1), visualBottom - 1);
+          const x = Math.min(Math.max(r.left + r.width / 2, visualLeft + 1), visualLeft + vw - 1);
+          const hit = document.elementFromPoint(x, y);
+          return hit !== null && (hit === el || el.contains(hit));
+        })
         .map(({ el, r }) => `${el.tagName} "${(el.textContent || "").trim().slice(0, 24)}" bis ${Math.round(r.bottom)}`);
       if (out.underIndicator.length) out.problems.push("etwas liegt unter dem Home-Indicator");
 
@@ -279,7 +353,7 @@ async function inspect(page, { tabbar, touch, insets }) {
       const screen = document.querySelector("[data-tempo-scroll]");
       if (screen) screen.scrollTop = screen.scrollHeight;
       out.scale = window.devicePixelRatio;
-      out.viewport = { width: vw, height: vh };
+      out.viewport = { width: Math.round(vw), height: Math.round(vh) };
       return out;
     },
     { tabbar, touch, insets },
@@ -354,33 +428,103 @@ for (const mode of MODES) {
     await page.waitForTimeout(900);
   }
 
+  const cdp = await page.context().newCDPSession(page);
+
   for (const [route, name] of SCREENS) {
     await page.goto(`${BASE}${route}`, { waitUntil: "networkidle" });
     await page.addStyleTag({ content: insetCss(mode.insets) });
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(400);
 
-    const result = await inspect(page, { tabbar: TABBAR, touch: TOUCH, insets: mode.insets });
+    for (const zoom of ZOOMS) {
+      await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: zoom });
+      await page.waitForTimeout(zoom === 1 ? 300 : 450);
 
-    // After scrolling to the end, the bar must still be where it was.
-    await page.waitForTimeout(200);
-    const settled = await page.evaluate(() => {
-      const nav = document.querySelector("nav[aria-label='Hauptnavigation']");
-      return nav
-        ? { bottom: Math.round(nav.getBoundingClientRect().bottom), vh: window.innerHeight }
-        : null;
-    });
-    if (settled && Math.abs(settled.bottom - settled.vh) > 1) {
-      result.problems.push(`Leiste wandert beim Scrollen: ${settled.bottom} statt ${settled.vh}`);
+      const result = await inspect(page, {
+        tabbar: TABBAR,
+        touch: TOUCH,
+        insets: mode.insets,
+      });
+
+      // After scrolling to the end, the bar must still be where it was.
+      await page.waitForTimeout(150);
+      const settled = await page.evaluate(() => {
+        const nav = document.querySelector("nav[aria-label='Hauptnavigation']");
+        if (!nav) return null;
+        const view = window.visualViewport;
+        return {
+          bottom: Math.round(nav.getBoundingClientRect().bottom),
+          visible: Math.round(view ? view.offsetTop + view.height : window.innerHeight),
+        };
+      });
+      if (settled && Math.abs(settled.bottom - settled.visible) > 1) {
+        result.problems.push(
+          `Leiste wandert beim Scrollen: ${settled.bottom} statt ${settled.visible}`,
+        );
+      }
+
+      const label = zoom === 1 ? name : `${name}@${zoom}x`;
+      const shot = await page.screenshot({ path: `${OUT}/${mode.name}-${label}.png` });
+      // The painted check only at 1.0: above it the screenshot is scaled
+      // and the mapping from CSS pixels to image pixels stops being the
+      // device pixel ratio.
+      if (result.bar && zoom === 1) {
+        const painted = inspectStrip(shot, result.bar, result.scale ?? 1);
+        result.paint = painted;
+        if (painted.problem) result.problems.push(painted.problem);
+      }
+      report.push({ mode: mode.name, name: label, zoom, ...result });
     }
 
-    const shot = await page.screenshot({ path: `${OUT}/${mode.name}-${name}.png` });
-    if (result.bar) {
-      const painted = inspectStrip(shot, result.bar, result.scale ?? 1);
-      result.paint = painted;
-      if (painted.problem) result.problems.push(painted.problem);
-    }
-    report.push({ mode: mode.name, name, ...result });
+    await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 1 });
   }
+
+  // The keyboard, as far as it goes without a device.
+  //
+  // iOS shrinks the visual viewport from below when the keyboard opens
+  // and leaves the layout viewport alone — the same divergence zoom
+  // produces, from the other end. Chromium has no keyboard to open, so
+  // the reported height is overridden and the resize event fired: what
+  // this checks is that the shell follows a shrunk visual viewport, not
+  // that WebKit shrinks it. The expected height is the injected constant,
+  // so the assertion cannot agree with itself by accident.
+  await page.goto(`${BASE}/coach`, { waitUntil: "networkidle" });
+  await page.addStyleTag({ content: insetCss(mode.insets) });
+  await page.waitForTimeout(400);
+  const keyboard = await page.evaluate((keyboardHeight) => {
+    const view = window.visualViewport;
+    if (!view) return { skipped: "kein visualViewport" };
+    const full = view.height;
+    const shrunk = full - keyboardHeight;
+    Object.defineProperty(view, "height", { configurable: true, get: () => shrunk });
+    view.dispatchEvent(new Event("resize"));
+    return new Promise((resolve) =>
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          const shell = document.getElementById("root").getBoundingClientRect();
+          resolve({
+            erwartet: Math.round(shrunk),
+            huelle: Math.round(shell.height),
+            unterkante: Math.round(shell.bottom),
+          });
+        }),
+      ),
+    );
+  }, KEYBOARD_HEIGHT);
+
+  const keyboardProblems = [];
+  if (keyboard.skipped) {
+    keyboardProblems.push(keyboard.skipped);
+  } else if (Math.abs(keyboard.huelle - keyboard.erwartet) > 1) {
+    keyboardProblems.push(
+      `Hülle folgt der Tastatur nicht: ${keyboard.huelle} statt ${keyboard.erwartet}`,
+    );
+  }
+  report.push({
+    mode: mode.name,
+    name: "Coach + Tastatur (simuliert)",
+    keyboard,
+    problems: keyboardProblems,
+  });
   await close();
 }
 
@@ -396,9 +540,16 @@ for (const entry of report) {
       ? "keine Leiste"
       : "";
   console.log(`\n── ${entry.name}`);
+  if (entry.keyboard) {
+    console.log(
+      `   Hülle ${entry.keyboard.huelle}px bei erwarteten ${entry.keyboard.erwartet}px`,
+    );
+  }
   if (bar) {
     console.log(
-      `   ${bar}  Hülle ${entry.shell?.top}–${entry.shell?.bottom} ${entry.shell?.position}  Dokument scrollt: ${entry.bodyScrolls}`,
+      `   ${bar}  Hülle ${entry.shell?.top}–${entry.shell?.bottom}` +
+        `  sichtbar ${entry.visual?.top}–${entry.visual?.bottom} (Zoom ${entry.visual?.scale},` +
+        ` Layout ${entry.visual?.layoutHeight})  gebunden: ${entry.shell?.gebunden}`,
     );
     if (entry.paint) {
       console.log(

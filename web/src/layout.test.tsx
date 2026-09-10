@@ -43,6 +43,19 @@ describe("the app shell", () => {
     expect(root).toContain("background: var(--t-bg)");
   });
 
+  it("gives the visual viewport the last word, when it has been measured", () => {
+    const bound = css.slice(css.indexOf("#root[data-vv] {"));
+
+    // A fixed box follows the laid-out page. In an installed iOS PWA that
+    // is not what you see as soon as you zoom, so once lib/visualViewport
+    // has measured, these four take over from inset: 0.
+    expect(bound).toContain("top: var(--vv-top)");
+    expect(bound).toContain("left: var(--vv-left)");
+    expect(bound).toContain("width: var(--vv-width)");
+    expect(bound).toContain("height: var(--vv-height)");
+    expect(bound).toContain("inset: auto");
+  });
+
   it("keeps the viewport units as the fallback, newest last", () => {
     const body = css.slice(css.indexOf("body {"), css.indexOf("#root {"));
 
